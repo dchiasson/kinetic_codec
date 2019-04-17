@@ -44,9 +44,10 @@ def process_csv(file_name):
             for row in reader:
                 data_list.append(float(row[i]))
             data_array = np.array(data_list, np.float64)
-            mmap_file = np.memmap(os.path.join(dir_name, field), dtype='i4', mode='w+', shape=len(data_array))
+            mmap_file = np.memmap(os.path.join(dir_name, field), dtype='i2', mode='w+', shape=len(data_array))
             divisor = find_divisor(data_array)
-            fixed_pt = np.round(data_array*divisor).astype(int)
+            fixed_pt = np.round(data_array*divisor).astype(np.int16)
+            print(len(fixed_pt))
             print("divisor {}, precision {}".format(divisor, np.log2(max(fixed_pt) - min(fixed_pt))))
             mmap_file[:] = fixed_pt
             mmap_file.flush()
