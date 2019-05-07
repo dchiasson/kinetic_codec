@@ -6,7 +6,8 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
-set(GCC_CUSTOM_FLAGS "-Wall -ggdb -Wextra")
+#set(GCC_CUSTOM_FLAGS "-Wall -g -Wextra")
+set(CMAKE_C_FLAGS "-Wall -g -Wextra")
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/src)
 
