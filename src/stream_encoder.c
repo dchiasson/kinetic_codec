@@ -2,43 +2,111 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <stdlib.h>
 
 typedef struct{
   int16_t *x;
   int16_t *y;
   int16_t *z;
+  /// @TODO(David): Should these two be associated with each diminsion or with each object? My pointer arrays aren't being useful...
+  uint32_t data_len;
+  uint32_t data_index;
 }Vect;
 
-typedef struct {
+typedef struct{
+  Vect *pos;
+  Vect *vel;
+  Vect *accel;
+}Position;
+
+typedef struct{
+  Vect *orient;
+  Vect *rot_vel;
+  Vect *rot_accel;
+}Orientation;
+
+typedef struct{
+  Position *position;
+  Orientation *orientation;
+  int16_t *pointers[18];
+  int pointer_count;
+}ObjectState;
+
+typedef struct{
   uint8_t *data_out;
   uint64_t bit_pointer;
-}DataWriter;
+}CompressedDataWriter;
 
-typedef struct {
+typedef struct{
   uint8_t *data_in;
   uint64_t bit_pointer;
-}DataReader;
+}CompressedDataReader;
 
-typedef struct {
+typedef struct{
   uint8_t rice_k;
+  int block_size;
+  int prediction_strategy;
 }Parameters;
+#define BLOCK_SIZE_MAX (-1)
+#define PREDICTION_DIFF_ENCODING 1
 Parameters params;
 
-void put_bit(uint8_t bit, DataWriter *data_writer)
+void build_object_state(Position *position, Orientation *orientation, ObjectState *object_state) {
+  object_state->position = position;
+  object_state->orientation = orientation;
+  object_state->pointer_count = 0;
+  if (position) {
+    if(position->pos) {
+      object_state->pointers[object_state->pointer_count++] = position->pos->x;
+      object_state->pointers[object_state->pointer_count++] = position->pos->y;
+      object_state->pointers[object_state->pointer_count++] = position->pos->z;
+    }
+    if(position->vel) {
+      object_state->pointers[object_state->pointer_count++] = position->vel->x;
+      object_state->pointers[object_state->pointer_count++] = position->vel->y;
+      object_state->pointers[object_state->pointer_count++] = position->vel->z;
+    }
+    if(position->accel) {
+      object_state->pointers[object_state->pointer_count++] = position->accel->x;
+      object_state->pointers[object_state->pointer_count++] = position->accel->y;
+      object_state->pointers[object_state->pointer_count++] = position->accel->z;
+    }
+  }
+  if (orientation) {
+	/// @TODO(David): Change this order
+    if(orientation->rot_vel) {
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->x;
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->y;
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->z;
+    }
+    if(orientation->orient) {
+      object_state->pointers[object_state->pointer_count++] = orientation->orient->x;
+      object_state->pointers[object_state->pointer_count++] = orientation->orient->y;
+      object_state->pointers[object_state->pointer_count++] = orientation->orient->z;
+    }
+    if(orientation->rot_accel) {
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->x;
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->y;
+      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->z;
+    }
+  }
+}
+
+void put_bit(uint8_t bit, CompressedDataWriter *data_writer)
 {
   data_writer->data_out[data_writer->bit_pointer >> 3] |= (bit & 1) << (data_writer->bit_pointer & 7);
   (data_writer->bit_pointer)++;
 }
 
-uint8_t get_bit(DataReader *data_reader) {
+uint8_t get_bit(CompressedDataReader *data_reader) {
   uint8_t bit;
   bit = (data_reader->data_in[data_reader->bit_pointer >> 3] >> (data_reader->bit_pointer & 7)) & 1;
   data_reader->bit_pointer++;
   return bit;
 }
 
-void put_word(uint16_t word, DataWriter *data_writer) {
+void put_word(uint16_t word, CompressedDataWriter *data_writer) {
   // Big endian
   data_writer->data_out[data_writer->bit_pointer >> 3] = word >> 8 & 0xff;
   data_writer->bit_pointer += 8;
@@ -46,7 +114,7 @@ void put_word(uint16_t word, DataWriter *data_writer) {
   data_writer->bit_pointer += 8;
 }
 
-uint16_t get_word(DataReader *data_reader) {
+uint16_t get_word(CompressedDataReader *data_reader) {
   // Big endian
   /// @TODO(David): assumed to be at byte boundary
   uint16_t val = 0;
@@ -57,14 +125,15 @@ uint16_t get_word(DataReader *data_reader) {
   return val;
 }
 
-void put_vector_0(Vect *vect, DataWriter *data_writer) {
+
+void put_vector_0(Vect *vect, CompressedDataWriter *data_writer) {
     put_word(vect->x[0], data_writer);
     put_word(vect->y[0], data_writer);
     put_word(vect->z[0], data_writer);
 }
 
 /// @TODO(David): Use the FLAC functions, they are way more efficient
-void rice_encode(int32_t res, DataWriter *data_writer) {
+void rice_encode(int32_t res, CompressedDataWriter *data_writer) {
   uint16_t residual;
   if (res < 0)
     residual = -res*2-1;
@@ -81,7 +150,7 @@ void rice_encode(int32_t res, DataWriter *data_writer) {
   }
 }
 
-int32_t rice_decode(DataReader *data_reader) {
+int32_t rice_decode(CompressedDataReader *data_reader) {
   uint16_t res = 0;
   while (!get_bit(data_reader)) {
     res++;
@@ -97,42 +166,29 @@ int32_t rice_decode(DataReader *data_reader) {
   }
 }
 
-int encode_block(Vect accel, Vect gyro, Vect mag, uint32_t sample_count, DataWriter *data_writer, uint32_t *block_len) {
+int encode_block(ObjectState *input_state, CompressedDataWriter *data_writer) {
+  if (params.prediction_strategy == PREDICTION_DIFF_ENCODING) {
 
-  // place the first value uncompressed
-  put_vector_0(&accel, data_writer);
-  put_vector_0(&gyro, data_writer);
-  put_vector_0(&mag, data_writer);
-
-  long res;
-  for (unsigned int s=1; s < sample_count; s++) {
-    res = accel.x[s] - accel.x[s-1];
-    rice_encode(res, data_writer);
-    res = accel.y[s] - accel.y[s-1];
-    rice_encode(res, data_writer);
-    res = accel.z[s] - accel.z[s-1];
-    rice_encode(res, data_writer);
-
-    res = gyro.x[s] - gyro.x[s-1];
-    rice_encode(res, data_writer);
-    res = gyro.y[s] - gyro.y[s-1];
-    rice_encode(res, data_writer);
-    res = gyro.z[s] - gyro.z[s-1];
-    rice_encode(res, data_writer);
-
-    res = mag.x[s] - mag.x[s-1];// - gyro.x[s-1];
-    rice_encode(res, data_writer);
-    res = mag.y[s] - mag.y[s-1];// - gyro.y[s-1];
-    rice_encode(res, data_writer);
-    res = mag.z[s] - mag.z[s-1];// - gyro.z[s-1];
-    rice_encode(res, data_writer);
-
+    uint32_t sample_count = input_state->position->accel->data_len;
+	long res;
+	for (int stream=0; stream < input_state->pointer_count; stream++) {
+      put_word(input_state->pointers[stream][0], data_writer);
+	}
+	for (uint32_t sample=1; sample < sample_count; sample++) {
+	  for (int stream=0; stream < input_state->pointer_count; stream++) {
+        res = input_state->pointers[stream][sample] - input_state->pointers[stream][sample-1];
+        rice_encode(res, data_writer);
+	  }
+	}
   }
-  *block_len = data_writer->bit_pointer >> 3;
   return 0;
 }
 
-int decode_block(DataReader *data_reader, Vect *accel, Vect *gyro, Vect *mag, uint32_t sample_count) {
+int decode_block(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
+  Vect *accel = output_state->position->accel;
+  Vect *gyro = output_state->orientation->rot_vel;
+  Vect *mag = output_state->orientation->orient;
+
   accel->x[0] = get_word(data_reader);
   accel->y[0] = get_word(data_reader);
   accel->z[0] = get_word(data_reader);
@@ -161,20 +217,15 @@ int decode_block(DataReader *data_reader, Vect *accel, Vect *gyro, Vect *mag, ui
   return 0;
 }
 
-int check_errors(Vect *accel_in, Vect *accel_out, Vect *gyro_in, Vect *gyro_out, Vect *mag_in, Vect *mag_out, uint32_t sample_count) {
-  for (unsigned int s=0; s < sample_count; s++) {
-    if (accel_in->x[s] != accel_out->x[s] ||
-        accel_in->y[s] != accel_out->y[s] ||
-        accel_in->z[s] != accel_out->z[s] ||
-        gyro_in->x[s] != gyro_out->x[s] ||
-        gyro_in->y[s] != gyro_out->y[s] ||
-        gyro_in->z[s] != gyro_out->z[s] ||
-        mag_in->x[s] != mag_out->x[s] ||
-        mag_in->y[s] != mag_out->y[s] ||
-        mag_in->z[s] != mag_out->z[s]
-		) {
-      printf("ERROR @%d: %d => %d\n", s, accel_in->x[s], accel_out->x[s]);
-	  exit(0);
+int check_errors(ObjectState *input_state, ObjectState *output_state) {
+  uint32_t sample_count = input_state->position->accel->data_len;
+
+  for (int p = 0; p < output_state->pointer_count; p++) {
+    for (int s=0; s < (int)sample_count; s++) {
+	  if (output_state->pointers[p][s] != input_state->pointers[p][s]) {
+	    printf("ERROR p: %d s: %d\n",p,s);
+		exit(1);
+	  }
 	}
   }
   return 0;
@@ -182,17 +233,14 @@ int check_errors(Vect *accel_in, Vect *accel_out, Vect *gyro_in, Vect *gyro_out,
 
 int main() {
   int sample_count = 965286;
-  Vect accel, mag, gyro;
-  Vect accel_out, mag_out, gyro_out;
-  accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+  Vect accel = {};
+  Vect gyro = {};
+  Vect mag = {};
+  Position input_pos = {NULL, NULL, &accel};
+  Orientation input_orient = {&mag, &gyro, NULL};
+  ObjectState input_state = {};
+
+  // Read in input data
   int fd;
   fd = open("../data/raw_data/0_AccelX", O_RDONLY, 0);
   accel.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
@@ -203,6 +251,7 @@ int main() {
   fd = open("../data/raw_data/0_AccelZ", O_RDONLY, 0);
   accel.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
+  accel.data_len = sample_count;
 
   fd = open("../data/raw_data/0_GyroX", O_RDONLY, 0);
   gyro.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
@@ -213,6 +262,7 @@ int main() {
   fd = open("../data/raw_data/0_GyroZ", O_RDONLY, 0);
   gyro.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
+  gyro.data_len = sample_count;
 
   fd = open("../data/raw_data/0_MagX", O_RDONLY, 0);
   mag.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
@@ -223,25 +273,53 @@ int main() {
   fd = open("../data/raw_data/0_MagZ", O_RDONLY, 0);
   mag.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
+  mag.data_len = sample_count;
+  build_object_state(&input_pos, &input_orient, &input_state);
 
   for (int i=0; i < sample_count; i++) {
     //printf("%d ", accel.x[i]);
   }
   printf("\n");
-  // @TODO(David): how do I know this is big enough?!
-  uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 10); // worse than .1 compression ration will seg fault
-  DataWriter data_writer;
-  data_writer.data_out = data_out;
-  data_writer.bit_pointer = 0;
-  params.rice_k = 3;
 
-  DataReader data_reader;
+  // Output data
+  Vect accel_out = {};
+  Vect gyro_out = {};
+  Vect mag_out = {};
+  accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+  accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+  accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+  mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+  mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+  mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+  Position output_pos = {NULL, NULL, &accel_out};
+  Orientation output_orient = {&mag_out, &gyro_out, NULL};
+  ObjectState output_state = {};
+  build_object_state(&output_pos, &output_orient, &output_state);
+
+
+  // @TODO(David): how do I know this is big enough?!
+  uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 10); // worse than .1 compression ratio will seg fault
+  CompressedDataWriter data_writer = {};
+  data_writer.data_out = data_out;
+
+  params.rice_k = 3;
+  params.block_size = BLOCK_SIZE_MAX;
+  params.prediction_strategy = PREDICTION_DIFF_ENCODING;
+
+
+  encode_block(&input_state, &data_writer);
+  uint32_t block_len = data_writer.bit_pointer >> 3;
+
+
+  // Decode the data we just compressed to check for errors
+  CompressedDataReader data_reader = {};
   data_reader.data_in = data_out;
-  data_reader.bit_pointer = 0;
-  uint32_t block_len = 0;
-  encode_block(accel, gyro, mag, sample_count, &data_writer, &block_len);
-  decode_block(&data_reader, &accel_out, &gyro_out, &mag_out, sample_count);
-  check_errors(&accel, &accel_out, &gyro, &gyro_out, &mag, &mag_out, sample_count);
+
+  decode_block(&data_reader, &output_state, sample_count);
+  check_errors(&input_state, &output_state);
 
   printf("\nRICE: %d\n", params.rice_k);
   printf("Output byte len: %d\n", (int)block_len);
