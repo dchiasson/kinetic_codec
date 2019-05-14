@@ -74,7 +74,7 @@ void build_object_state(Position *position, Orientation *orientation, ObjectStat
     }
   }
   if (orientation) {
-	/// @TODO(David): Change this order
+    /// @TODO(David): Change this order
     if(orientation->rot_vel) {
       object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->x;
       object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->y;
@@ -108,6 +108,7 @@ uint8_t get_bit(CompressedDataReader *data_reader) {
 
 void put_word(uint16_t word, CompressedDataWriter *data_writer) {
   // Big endian
+  data_writer->bit_pointer += 8 - (data_writer->bit_pointer & 0b111); // pad with zeros till byte boundary
   data_writer->data_out[data_writer->bit_pointer >> 3] = word >> 8 & 0xff;
   data_writer->bit_pointer += 8;
   data_writer->data_out[data_writer->bit_pointer >> 3] = word & 0xff;
@@ -116,7 +117,7 @@ void put_word(uint16_t word, CompressedDataWriter *data_writer) {
 
 uint16_t get_word(CompressedDataReader *data_reader) {
   // Big endian
-  /// @TODO(David): assumed to be at byte boundary
+  data_reader->bit_pointer += 8 - (data_reader->bit_pointer & 0b111); // padded with zeros till byte boundary
   uint16_t val = 0;
   val |= data_reader->data_in[data_reader->bit_pointer >> 3] << 8;
   data_reader->bit_pointer += 8;
@@ -168,51 +169,39 @@ int32_t rice_decode(CompressedDataReader *data_reader) {
 
 int encode_block(ObjectState *input_state, CompressedDataWriter *data_writer) {
   if (params.prediction_strategy == PREDICTION_DIFF_ENCODING) {
-
     uint32_t sample_count = input_state->position->accel->data_len;
-	long res;
-	for (int stream=0; stream < input_state->pointer_count; stream++) {
-      put_word(input_state->pointers[stream][0], data_writer);
-	}
-	for (uint32_t sample=1; sample < sample_count; sample++) {
-	  for (int stream=0; stream < input_state->pointer_count; stream++) {
-        res = input_state->pointers[stream][sample] - input_state->pointers[stream][sample-1];
-        rice_encode(res, data_writer);
-	  }
-	}
+    for (uint32_t sample=0; sample < sample_count; sample++) {
+      if ((params.block_size == BLOCK_SIZE_MAX && sample == 0) ||
+          (sample % params.block_size == 0)) { // block header
+        for (int stream=0; stream < input_state->pointer_count; stream++) {
+          put_word(input_state->pointers[stream][sample], data_writer);
+        }
+      } else {
+        long res;
+        for (int stream=0; stream < input_state->pointer_count; stream++) {
+          res = input_state->pointers[stream][sample] - input_state->pointers[stream][sample-1];
+          rice_encode(res, data_writer);
+        }
+      }
+    }
   }
   return 0;
 }
 
 int decode_block(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
-  Vect *accel = output_state->position->accel;
-  Vect *gyro = output_state->orientation->rot_vel;
-  Vect *mag = output_state->orientation->orient;
-
-  accel->x[0] = get_word(data_reader);
-  accel->y[0] = get_word(data_reader);
-  accel->z[0] = get_word(data_reader);
-
-  gyro->x[0] = get_word(data_reader);
-  gyro->y[0] = get_word(data_reader);
-  gyro->z[0] = get_word(data_reader);
-
-  mag->x[0] = get_word(data_reader);
-  mag->y[0] = get_word(data_reader);
-  mag->z[0] = get_word(data_reader);
-
-  for (unsigned int s=1; s < sample_count; s++) {
-    accel->x[s] = accel->x[s-1] + rice_decode(data_reader);
-    accel->y[s] = accel->y[s-1] + rice_decode(data_reader);
-    accel->z[s] = accel->z[s-1] + rice_decode(data_reader);
-
-    gyro->x[s] = gyro->x[s-1] + rice_decode(data_reader);
-    gyro->y[s] = gyro->y[s-1] + rice_decode(data_reader);
-    gyro->z[s] = gyro->z[s-1] + rice_decode(data_reader);
-
-    mag->x[s] = mag->x[s-1] + rice_decode(data_reader);
-    mag->y[s] = mag->y[s-1] + rice_decode(data_reader);
-    mag->z[s] = mag->z[s-1] + rice_decode(data_reader);
+  if (params.prediction_strategy == PREDICTION_DIFF_ENCODING) {
+    for (uint32_t sample=0; sample < sample_count; sample++) {
+      if ((params.block_size == BLOCK_SIZE_MAX && sample == 0) ||
+          (sample % params.block_size == 0)) { // block header
+        for (int stream=0; stream < output_state->pointer_count; stream++) {
+          output_state->pointers[stream][sample] = get_word(data_reader);
+        }
+      } else {
+        for (int stream=0; stream < output_state->pointer_count; stream++) {
+          output_state->pointers[stream][sample] = output_state->pointers[stream][sample-1] + rice_decode(data_reader);
+        }
+      }
+    }
   }
   return 0;
 }
@@ -222,11 +211,11 @@ int check_errors(ObjectState *input_state, ObjectState *output_state) {
 
   for (int p = 0; p < output_state->pointer_count; p++) {
     for (int s=0; s < (int)sample_count; s++) {
-	  if (output_state->pointers[p][s] != input_state->pointers[p][s]) {
-	    printf("ERROR p: %d s: %d\n",p,s);
-		exit(1);
-	  }
-	}
+      if (output_state->pointers[p][s] != input_state->pointers[p][s]) {
+        printf("ERROR p: %d s: %d\n",p,s);
+        exit(1);
+      }
+    }
   }
   return 0;
 }
@@ -306,7 +295,7 @@ int main() {
   data_writer.data_out = data_out;
 
   params.rice_k = 3;
-  params.block_size = BLOCK_SIZE_MAX;
+  params.block_size = 2000;
   params.prediction_strategy = PREDICTION_DIFF_ENCODING;
 
 
@@ -321,7 +310,8 @@ int main() {
   decode_block(&data_reader, &output_state, sample_count);
   check_errors(&input_state, &output_state);
 
-  printf("\nRICE: %d\n", params.rice_k);
+  printf("RICE K: %d\n", params.rice_k);
+  printf("Block size: %d\n", params.block_size);
   printf("Output byte len: %d\n", (int)block_len);
   printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
 
