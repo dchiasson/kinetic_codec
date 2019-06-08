@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include "fir_predictive_filter.h"
 
 typedef struct{
   int16_t *x;
@@ -136,9 +137,9 @@ void put_vector_0(Vect *vect, CompressedDataWriter *data_writer) {
 /// @TODO(David): Use the FLAC functions, they are way more efficient
 void rice_encode(int32_t res, CompressedDataWriter *data_writer) {
   uint16_t residual;
-  if (res < 0)
+  if (res < 0) // negative is odd
     residual = -res*2-1;
-  else
+  else // positive is even
     residual = res*2;
   //printf("%lu : %d \n", data_writer->bit_pointer, residual);
   // exponent
@@ -221,7 +222,16 @@ int check_errors(ObjectState *input_state, ObjectState *output_state) {
 }
 
 int main() {
-  int sample_count = 965286;
+  int fd;
+  fd = open("../data/fixed_poly_reg/4_deg_poly_reg/4", O_RDONLY, 0);
+  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*4*4, PROT_READ, MAP_SHARED, fd, 0);
+  print_poly(poly_reg);
+  close(fd);
+  return 0;
+  initialize_poly_predictor(8, 4);
+  return 0;
+  //int sample_count = 965286;
+  int sample_count = 6167;
   Vect accel = {};
   Vect gyro = {};
   Vect mag = {};
@@ -230,7 +240,7 @@ int main() {
   ObjectState input_state = {};
 
   // Read in input data
-  int fd;
+  //int fd;
   fd = open("../data/raw_data/0_AccelX", O_RDONLY, 0);
   accel.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);

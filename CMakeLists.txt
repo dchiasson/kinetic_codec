@@ -6,10 +6,17 @@ set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
+set(LIBFIX_MATRIX_DIR ${CMAKE_SOURCE_DIR}/libs/libfixmatrix)
+set(LIBFIX_MATH_DIR ${LIBFIX_MATRIX_DIR}/libfixmath)
+include_directories(${LIBFIX_MATRIX_DIR})
+include_directories(${LIBFIX_MATH_DIR})
+
 #set(GCC_CUSTOM_FLAGS "-Wall -g -Wextra")
 set(CMAKE_C_FLAGS "-Wall -g -Wextra")
 
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/src)
+add_subdirectory(${LIBFIX_MATRIX_DIR})
 
 
 message("      ___                       ___           ___                                   ___     ")

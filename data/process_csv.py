@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Conversion of a CSV file into fixed point, compact binary files
@@ -90,6 +90,6 @@ if __name__ == "__main__":
         sys.exit(1)
     elif len(sys.argv) == 1:
         #process_csv(raw_input("CSV input file name: "))
-        process_csv('one_sensor_2019-04-02.csv')
+        process_csv('fixed_pt.csv')
     else:
         process_csv(sys.argv[1])
