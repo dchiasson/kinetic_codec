@@ -1,6 +1,7 @@
 #include "fixmatrix.h"
 #include "fix16.h"
 #include <stdio.h>
+#include <stdint.h>
 
 mf16 coef_computer;
 int history_len;

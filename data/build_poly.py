@@ -18,10 +18,11 @@ for m in range(1, 7): # polynomial order
         os.makedirs(dir_name)
     except OSError:
         pass
-    for n in list(range(m, 16)) + [2**i for i in range(4, 15)]:
+    #for n in list(range(m, 100)) + [2**i for i in range(4, 15)]:
+    for n in range(m, 7):
         print("computing m={}, n={}".format(m, n))
         x = np.matrix([[b**a for a in range(m)] for b in range(n)], np.double)
-        n_p1 = np.matrix([(n+1) ** a for a in range(m)], np.double)
+        n_p1 = np.matrix([(n) ** a for a in range(m)], np.double)
         factor = n_p1 *((x.T * x)**-1)*x.T
         if fixed_point:
             mmap_file = np.memmap(os.path.join(dir_name, str(n)), dtype=np.int32, mode='w+', shape=np.shape(factor))

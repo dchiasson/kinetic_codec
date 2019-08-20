@@ -31,6 +31,7 @@ typedef struct{
   Position *position;
   Orientation *orientation;
   int16_t *pointers[18];
+  FIRFilterState fir_state[18]; // @TODO(David): we can make this a void pointer to make it more flexible
   int pointer_count;
 }ObjectState;
 
@@ -53,7 +54,7 @@ typedef struct{
 #define PREDICTION_DIFF_ENCODING 1
 Parameters params;
 
-void build_object_state(Position *position, Orientation *orientation, ObjectState *object_state) {
+void build_object_state(Position *position, Orientation *orientation, int order, int hist, ObjectState *object_state) {
   object_state->position = position;
   object_state->orientation = orientation;
   object_state->pointer_count = 0;
@@ -92,6 +93,15 @@ void build_object_state(Position *position, Orientation *orientation, ObjectStat
       object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->z;
     }
   }
+  int fd;
+  char buffer[50];
+  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, hist);
+  fd = open(buffer, O_RDONLY, 0);
+  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*hist, PROT_READ, MAP_SHARED, fd, 0);
+  for (int i=0; i<18; i++) {
+    init_fir_filter(poly_reg, hist, &object_state->fir_state[i]);
+  }
+  close(fd);
 }
 
 void put_bit(uint8_t bit, CompressedDataWriter *data_writer)
@@ -181,9 +191,31 @@ int encode_block(ObjectState *input_state, CompressedDataWriter *data_writer) {
         long res;
         for (int stream=0; stream < input_state->pointer_count; stream++) {
           res = input_state->pointers[stream][sample] - input_state->pointers[stream][sample-1];
+          //printf("%d\n", res);
           rice_encode(res, data_writer);
         }
       }
+    }
+  }
+  return 0;
+}
+
+int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
+  uint32_t sample_count = input_state->position->accel->data_len;
+  for (uint32_t sample=0; sample < sample_count; sample++) {
+    for (int stream=0; stream < input_state->pointer_count; stream++) {
+      int32_t res = get_fir_residual(input_state->pointers[stream][sample], &input_state->fir_state[stream]);
+      //printf("%d\n", res);
+      //rice_encode(get_fir_residual(input_state->pointers[stream][sample], &input_state->fir_state[stream]), data_writer);
+      rice_encode(res, data_writer);
+    }
+  }
+  return 0;
+}
+int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
+  for (uint32_t sample=0; sample < sample_count; sample++) {
+    for (int stream=0; stream < output_state->pointer_count; stream++) {
+      output_state->pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader), &output_state->fir_state[stream]);
     }
   }
   return 0;
@@ -223,13 +255,6 @@ int check_errors(ObjectState *input_state, ObjectState *output_state) {
 
 int main() {
   int fd;
-  fd = open("../data/fixed_poly_reg/4_deg_poly_reg/4", O_RDONLY, 0);
-  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*4*4, PROT_READ, MAP_SHARED, fd, 0);
-  print_poly(poly_reg);
-  close(fd);
-  return 0;
-  initialize_poly_predictor(8, 4);
-  return 0;
   //int sample_count = 965286;
   int sample_count = 6167;
   Vect accel = {};
@@ -273,12 +298,17 @@ int main() {
   mag.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   mag.data_len = sample_count;
-  build_object_state(&input_pos, &input_orient, &input_state);
+
+  for (int order=0; order<=6; order++) {
+    for (int hist=order; hist<7; hist++) {
+      int best_k = 0;
+      double best_cr = 0;
+      for (int k=6; k<14; k++) {
+  build_object_state(&input_pos, &input_orient, order, hist, &input_state);
 
   for (int i=0; i < sample_count; i++) {
     //printf("%d ", accel.x[i]);
   }
-  printf("\n");
 
   // Output data
   Vect accel_out = {};
@@ -296,20 +326,21 @@ int main() {
   Position output_pos = {NULL, NULL, &accel_out};
   Orientation output_orient = {&mag_out, &gyro_out, NULL};
   ObjectState output_state = {};
-  build_object_state(&output_pos, &output_orient, &output_state);
+  //build_object_state(&output_pos, &output_orient, order, hist, &output_state);
 
 
   // @TODO(David): how do I know this is big enough?!
-  uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 10); // worse than .1 compression ratio will seg fault
+  uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 1000); // worse than .1 compression ratio will seg fault
   CompressedDataWriter data_writer = {};
   data_writer.data_out = data_out;
 
-  params.rice_k = 3;
-  params.block_size = 2000;
+  params.rice_k = k;
+  params.block_size = BLOCK_SIZE_MAX;
   params.prediction_strategy = PREDICTION_DIFF_ENCODING;
 
 
-  encode_block(&input_state, &data_writer);
+  //encode_block(&input_state, &data_writer);
+  encode_data(&input_state, &data_writer);
   uint32_t block_len = data_writer.bit_pointer >> 3;
 
 
@@ -317,15 +348,28 @@ int main() {
   CompressedDataReader data_reader = {};
   data_reader.data_in = data_out;
 
-  decode_block(&data_reader, &output_state, sample_count);
-  check_errors(&input_state, &output_state);
+  //decode_block(&data_reader, &output_state, sample_count);
+  //decode_data(&data_reader, &output_state, sample_count);
+  //check_errors(&input_state, &output_state);
 
-  printf("RICE K: %d\n", params.rice_k);
-  printf("Block size: %d\n", params.block_size);
-  printf("Output byte len: %d\n", (int)block_len);
-  printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
-
+  //printf("RICE K: %d\n", params.rice_k);
+  //printf("Block size: %d\n", params.block_size);
+  //printf("Output byte len: %d\n", (int)block_len);
+  //printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
+  double cr =  ((double)(sample_count*2*9)/block_len);
+  if (cr > best_cr) {
+    best_k = k;
+    best_cr = cr;
+  }
   if (data_out)
     free(data_out);
+
+
+      }
+  printf("order: %d, hist: %d, k: %d, CR: %f\n", order, hist, best_k, best_cr);
+      if (order == 0) hist += 100;
+    }
+  }
+
   return 0;
 }
