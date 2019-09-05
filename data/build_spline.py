@@ -12,72 +12,142 @@ applications.
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
-y = [0, 1, 4, -1]
-n = len(y) - 1 # uses past n + 1 samples
 
-# Build our system of linear equations based on spline constraints
-# Ax = b where x is vector of spline coefficients
-A = np.zeros((4*n, 4*n), np.double)
+TESTING = True
+figure = 0
 
-# These computations can probably be done with n less rows/columns in this
-# matrix. Not really worth my time to optimize it.
-for s in range(n):
-    # Beginning equality constraint
-    A[2*s][4*s] = 1
-    # Ending equality constraint
-    A[2*s+1][4*s] = 1
-    A[2*s+1][4*s + 1] = 1
-    A[2*s+1][4*s + 2] = 1
-    A[2*s+1][4*s + 3] = 1
-for s in range(n-1):
-    # First-order continuity constraint
-    # b_i + 2*c_i + 3*d_i - b_(i-1) = 0
-    A[2*n + s][4*s + 1] = 1
-    A[2*n + s][4*s + 2] = 2
-    A[2*n + s][4*s + 3] = 3
-    A[2*n + s][4*s + 5] = -1
-    # Second-order continuity constraint
-    A[3*n - 1 + s][4*s + 2] = 2
-    A[3*n - 1 + s][4*s + 3] = 6
-    A[3*n - 1 + s][4*s + 6] = -2
-# Natural boundary conditions
-#c_0 = 0
-A[4*n - 2][2] = 1
-# c_n + 3*d_n = 0
-A[4*n - 1][4*n - 2] = 1
-A[4*n - 1][4*n - 1] = 3
+# Boundary conditions
+conditions = [NATURAL, END_SLOPE_0, PERIODIC, CONSERVATIVE, NOT_A_KNOT] = range(5)
+boundary_condition = NATURAL
 
-Ry = np.zeros((4*n, n+1))
-for s in range(n):
-    Ry[2*s][s] = 1
-    Ry[2*s + 1][s+1] = 1
 
-A = np.matrix(A)
-Ry = np.matrix(Ry)
-y = np.matrix(y)
+n = 3 # uses past n + 1 samples
 
-x = A**-1 * Ry * y.T
-x = x.T.tolist()[0]
-print("this is x")
-print(x)
+for boundary_condition in conditions:
+    print("condition {}:".format(boundary_condition))
+    for n in range(2,10):
+        dir_name = 'natural_spline_pred/condition{}'.format(boundary_condition)
+        try:
+            os.makedirs(dir_name)
+        except OSError:
+            pass
+        # Build our system of linear equations based on spline constraints
+        # Ax = b where x is vector of spline coefficients
+        A = np.zeros((4*n, 4*n), np.double)
 
-def spline_it(i):
-    s = int(i)
-    s = min(n-1, s)
-    rem = i - s
-    print(i, s, rem)
-    return float(x[s*4] + x[s*4+1]*rem + x[s*4+2]*rem**2 + x[s*4+3] *rem**3)
-# c_c = a_i + b_i*x + c_i*x**2 + d_i*x**3
-t = np.arange(0, 6, .1)
-my = list(map(spline_it, t))
-print(x)
-print(t)
-print(my)
+        # These computations can probably be done with n less rows/columns in this
+        # matrix. Not really worth my time to optimize it.
+        for s in range(n):
+            # Beginning equality constraint
+            A[2*s][4*s] = 1
+            # Ending equality constraint
+            A[2*s+1][4*s] = 1
+            A[2*s+1][4*s + 1] = 1
+            A[2*s+1][4*s + 2] = 1
+            A[2*s+1][4*s + 3] = 1
+        for s in range(n-1):
+            # First-order continuity constraint
+            # b_i + 2*c_i + 3*d_i - b_(i-1) = 0
+            A[2*n + s][4*s + 1] = 1
+            A[2*n + s][4*s + 2] = 2
+            A[2*n + s][4*s + 3] = 3
+            A[2*n + s][4*s + 5] = -1
+            # Second-order continuity constraint
+            A[3*n - 1 + s][4*s + 2] = 2
+            A[3*n - 1 + s][4*s + 3] = 6
+            A[3*n - 1 + s][4*s + 6] = -2
+        if boundary_condition == NATURAL:
+            #c_0 = 0
+            A[-2][2] = 1
+            # c_n + 3*d_n = 0
+            A[-1][-2] = 1
+            A[-1][-1] = 3
+        elif boundary_condition == END_SLOPE_0: # AKA clamped
+            A[-2][1] = 1
+            A[-1][-3] = 1
+            A[-1][-2] = 2
+            A[-1][-1] = 3
+        elif boundary_condition == PERIODIC:
+            A[-2][1] = 1
+            A[-2][-3] = -1
+            A[-2][-2] = -2
+            A[-2][-1] = -3
+            A[-1][2] = 1
+            A[-1][-2] = -1
+            A[-1][-1] = -3
+        elif boundary_condition == NOT_A_KNOT:
+            A[-2][3] = 1
+            A[-2][7] = -1
+            A[-1][-1] = 1
+            A[-1][-5] = -1
+        elif boundary_condition == CONSERVATIVE:
+            A[-2][-2] = 1
+            A[-2][-1] = 3
+            A[-1][-3] = 1
+            A[-1][-2] = 2
+            A[-1][-1] = 3
+        else:
+            print("ERROR: boundary condition not yet supported")
 
-y = y.tolist()[0]
+        # rearranges our matrix so that it can be applied as an FIR
+        Ry = np.zeros((4*n, n+1))
+        for s in range(n):
+            Ry[2*s][s] = 1
+            Ry[2*s + 1][s+1] = 1
 
-plt.plot(y, marker="o")
-plt.plot(t, my)
+        # This vector applies our spline parameters to point n+1
+        rx = np.zeros(4*n)
+        rx[-4] = 1
+        rx[-3] = 2
+        rx[-2] = 4
+        rx[-1] = 8
 
-plt.show()
+        A = np.matrix(A)
+        Ry = np.matrix(Ry)
+        rx = np.matrix(rx)
+
+        fir = rx * A**-1 * Ry
+        mmap_file = np.memmap(os.path.join(dir_name, str(n)), dtype=np.int32, mode='w+', shape=np.shape(fir))
+        # conversion to libfixmath fix16_t type
+        # see `fix16_t_from_float` in fix16.h
+        fixed_fir = (fir * 0x10000)
+        fixed_fir = np.multiply((fixed_fir >= 0), fixed_fir + 0.5) + np.multiply((fixed_fir < 0), fixed_fir - 0.5)
+        fixed_fir = fixed_fir.astype(np.int32)
+        mmap_file[:] = fixed_fir
+        mmap_file.flush()
+
+        if TESTING:
+            # Plot the whole spline to confirm that it has desired behavior
+            y = [0, 1, 4, -1, 2, 2, 9, 7.1] * 3 # test points to fit a spline to
+            y = y[-(n+1)::]
+            y = np.matrix(y).T
+
+            # Compute all spline parameters
+            x = A**-1 * Ry * y
+            x = x.T.tolist()[0]
+
+            pred = fir * y
+            print(pred)
+    
+            def spline_it(i):
+                """Create one smoothed point using spline parameters"""
+                s = int(i)
+                s = min(n-1, s)
+                rem = i - s
+                # c_c = a_i + b_i*x + c_i*x**2 + d_i*x**3
+                return float(x[s*4] + x[s*4+1]*rem + x[s*4+2]*rem**2 + x[s*4+3] *rem**3)
+            t = np.arange(0, n + 3, .1)
+            my = list(map(spline_it, t))
+
+            #y = y.tolist()[0]
+
+            figure += 1
+            #plt.figure(figure)
+            plt.title('hist {}, cond {}'.format(n, boundary_condition))
+            plt.plot(y, marker="o")
+            plt.plot(t, my)
+            plt.plot(n+1, pred, marker="o")
+
+#plt.show()

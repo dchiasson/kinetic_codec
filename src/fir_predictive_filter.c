@@ -29,6 +29,9 @@ int init_fir_filter(int32_t *coeffs, int length, FIRFilterState *state) {
   for (int i = 0; i < length; i++)
     state->filter_coefs[i] = coeffs[i];
   state->filter_length = length;
+  for (int sample=0; sample < MAX_FIR_LENGTH; sample++) {
+    state->ring_buffer.past[sample] = fix16_from_int(0);
+  }
   return 0;
 }
 

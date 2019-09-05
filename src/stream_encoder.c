@@ -28,16 +28,21 @@ typedef struct{
 }Orientation;
 
 typedef struct{
-  Position *position;
-  Orientation *orientation;
   int16_t *pointers[18];
-  FIRFilterState fir_state[18]; // @TODO(David): we can make this a void pointer to make it more flexible
+  FIRFilterState fir_state[18];
   int pointer_count;
+}StreamFir;
+
+typedef struct{
+  Position position;
+  Orientation orientation;
+  StreamFir stream_fir; // @TODO(David): we can make this a void pointer to make it more flexible
 }ObjectState;
 
 typedef struct{
   uint8_t *data_out;
   uint64_t bit_pointer;
+  //ObjectState input_state = {};
 }CompressedDataWriter;
 
 typedef struct{
@@ -54,52 +59,53 @@ typedef struct{
 #define PREDICTION_DIFF_ENCODING 1
 Parameters params;
 
-void build_object_state(Position *position, Orientation *orientation, int order, int hist, ObjectState *object_state) {
-  object_state->position = position;
-  object_state->orientation = orientation;
-  object_state->pointer_count = 0;
+void build_stream_fir(int order, int history, ObjectState *object_state) {
+  Position *position = &object_state->position;
+  Orientation *orientation = &object_state->orientation;
+  StreamFir *stream_fir = &object_state->stream_fir;
+  object_state->stream_fir.pointer_count = 0;
   if (position) {
     if(position->pos) {
-      object_state->pointers[object_state->pointer_count++] = position->pos->x;
-      object_state->pointers[object_state->pointer_count++] = position->pos->y;
-      object_state->pointers[object_state->pointer_count++] = position->pos->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->pos->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->pos->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->pos->z;
     }
     if(position->vel) {
-      object_state->pointers[object_state->pointer_count++] = position->vel->x;
-      object_state->pointers[object_state->pointer_count++] = position->vel->y;
-      object_state->pointers[object_state->pointer_count++] = position->vel->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->vel->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->vel->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->vel->z;
     }
     if(position->accel) {
-      object_state->pointers[object_state->pointer_count++] = position->accel->x;
-      object_state->pointers[object_state->pointer_count++] = position->accel->y;
-      object_state->pointers[object_state->pointer_count++] = position->accel->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->accel->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->accel->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = position->accel->z;
     }
   }
   if (orientation) {
     /// @TODO(David): Change this order
     if(orientation->rot_vel) {
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->x;
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->y;
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_vel->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->z;
     }
     if(orientation->orient) {
-      object_state->pointers[object_state->pointer_count++] = orientation->orient->x;
-      object_state->pointers[object_state->pointer_count++] = orientation->orient->y;
-      object_state->pointers[object_state->pointer_count++] = orientation->orient->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->z;
     }
     if(orientation->rot_accel) {
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->x;
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->y;
-      object_state->pointers[object_state->pointer_count++] = orientation->rot_accel->z;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_accel->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_accel->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_accel->z;
     }
   }
   int fd;
   char buffer[50];
-  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, hist);
+  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
   fd = open(buffer, O_RDONLY, 0);
-  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*hist, PROT_READ, MAP_SHARED, fd, 0);
+  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
   for (int i=0; i<18; i++) {
-    init_fir_filter(poly_reg, hist, &object_state->fir_state[i]);
+    init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
   }
   close(fd);
 }
@@ -178,35 +184,12 @@ int32_t rice_decode(CompressedDataReader *data_reader) {
   }
 }
 
-int encode_block(ObjectState *input_state, CompressedDataWriter *data_writer) {
-  if (params.prediction_strategy == PREDICTION_DIFF_ENCODING) {
-    uint32_t sample_count = input_state->position->accel->data_len;
-    for (uint32_t sample=0; sample < sample_count; sample++) {
-      if ((params.block_size == BLOCK_SIZE_MAX && sample == 0) ||
-          (sample % params.block_size == 0)) { // block header
-        for (int stream=0; stream < input_state->pointer_count; stream++) {
-          put_word(input_state->pointers[stream][sample], data_writer);
-        }
-      } else {
-        long res;
-        for (int stream=0; stream < input_state->pointer_count; stream++) {
-          res = input_state->pointers[stream][sample] - input_state->pointers[stream][sample-1];
-          //printf("%d\n", res);
-          rice_encode(res, data_writer);
-        }
-      }
-    }
-  }
-  return 0;
-}
-
+/// @TODO(David): support block sizes
 int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
-  uint32_t sample_count = input_state->position->accel->data_len;
+  uint32_t sample_count = input_state->position.accel->data_len;
   for (uint32_t sample=0; sample < sample_count; sample++) {
-    for (int stream=0; stream < input_state->pointer_count; stream++) {
-      int32_t res = get_fir_residual(input_state->pointers[stream][sample], &input_state->fir_state[stream]);
-      //printf("%d\n", res);
-      //rice_encode(get_fir_residual(input_state->pointers[stream][sample], &input_state->fir_state[stream]), data_writer);
+    for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
+      int32_t res = get_fir_residual(input_state->stream_fir.pointers[stream][sample], &input_state->stream_fir.fir_state[stream]);
       rice_encode(res, data_writer);
     }
   }
@@ -214,162 +197,151 @@ int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
 }
 int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
   for (uint32_t sample=0; sample < sample_count; sample++) {
-    for (int stream=0; stream < output_state->pointer_count; stream++) {
-      output_state->pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader), &output_state->fir_state[stream]);
-    }
-  }
-  return 0;
-}
-
-int decode_block(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
-  if (params.prediction_strategy == PREDICTION_DIFF_ENCODING) {
-    for (uint32_t sample=0; sample < sample_count; sample++) {
-      if ((params.block_size == BLOCK_SIZE_MAX && sample == 0) ||
-          (sample % params.block_size == 0)) { // block header
-        for (int stream=0; stream < output_state->pointer_count; stream++) {
-          output_state->pointers[stream][sample] = get_word(data_reader);
-        }
-      } else {
-        for (int stream=0; stream < output_state->pointer_count; stream++) {
-          output_state->pointers[stream][sample] = output_state->pointers[stream][sample-1] + rice_decode(data_reader);
-        }
-      }
+    for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+      output_state->stream_fir.pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader), &output_state->stream_fir.fir_state[stream]);
     }
   }
   return 0;
 }
 
 int check_errors(ObjectState *input_state, ObjectState *output_state) {
-  uint32_t sample_count = input_state->position->accel->data_len;
+  uint32_t sample_count = input_state->position.accel->data_len;
 
-  for (int p = 0; p < output_state->pointer_count; p++) {
+  for (int p = 0; p < output_state->stream_fir.pointer_count; p++) {
     for (int s=0; s < (int)sample_count; s++) {
-      if (output_state->pointers[p][s] != input_state->pointers[p][s]) {
+      if (output_state->stream_fir.pointers[p][s] != input_state->stream_fir.pointers[p][s]) {
         printf("ERROR p: %d s: %d\n",p,s);
         exit(1);
+        break;
       }
     }
   }
+  return 0;
+}
+
+int load_sensor_data(ObjectState *input_state, int *sample_count) {
+  int fd;
+  /// @TODO(David): write a function to free an munmap sensor data
+  //*sample_count = 965286;
+  *sample_count = 6167;
+
+  // Read in input data
+  input_state->position.accel = malloc(sizeof(Vect));
+  Vect *accel = input_state->position.accel;
+  fd = open("../data/raw_data/0_AccelX", O_RDONLY, 0);
+  accel->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_AccelY", O_RDONLY, 0);
+  accel->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_AccelZ", O_RDONLY, 0);
+  accel->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  accel->data_len = *sample_count;
+
+  input_state->orientation.rot_vel = malloc(sizeof(Vect));
+  Vect *gyro = input_state->orientation.rot_vel;
+  fd = open("../data/raw_data/0_GyroX", O_RDONLY, 0);
+  gyro->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_GyroY", O_RDONLY, 0);
+  gyro->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_GyroZ", O_RDONLY, 0);
+  gyro->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  gyro->data_len = *sample_count;
+
+  input_state->orientation.orient = malloc(sizeof(Vect));
+  Vect *mag = input_state->orientation.orient;
+  fd = open("../data/raw_data/0_MagX", O_RDONLY, 0);
+  mag->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_MagY", O_RDONLY, 0);
+  mag->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  fd = open("../data/raw_data/0_MagZ", O_RDONLY, 0);
+  mag->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  mag->data_len = *sample_count;
   return 0;
 }
 
 int main() {
-  int fd;
-  //int sample_count = 965286;
-  int sample_count = 6167;
-  Vect accel = {};
-  Vect gyro = {};
-  Vect mag = {};
-  Position input_pos = {NULL, NULL, &accel};
-  Orientation input_orient = {&mag, &gyro, NULL};
-  ObjectState input_state = {};
+  ObjectState input_state;
+  int sample_count;
 
-  // Read in input data
-  //int fd;
-  fd = open("../data/raw_data/0_AccelX", O_RDONLY, 0);
-  accel.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_AccelY", O_RDONLY, 0);
-  accel.y = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_AccelZ", O_RDONLY, 0);
-  accel.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  accel.data_len = sample_count;
-
-  fd = open("../data/raw_data/0_GyroX", O_RDONLY, 0);
-  gyro.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_GyroY", O_RDONLY, 0);
-  gyro.y = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_GyroZ", O_RDONLY, 0);
-  gyro.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  gyro.data_len = sample_count;
-
-  fd = open("../data/raw_data/0_MagX", O_RDONLY, 0);
-  mag.x = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_MagY", O_RDONLY, 0);
-  mag.y = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_MagZ", O_RDONLY, 0);
-  mag.z = (int16_t*)mmap(NULL, sizeof(int16_t)*sample_count, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  mag.data_len = sample_count;
+  load_sensor_data(&input_state, &sample_count);
 
   for (int order=0; order<=6; order++) {
-    for (int hist=order; hist<7; hist++) {
+    for (int history=order; history<7; history++) {
       int best_k = 0;
       double best_cr = 0;
       for (int k=6; k<14; k++) {
-  build_object_state(&input_pos, &input_orient, order, hist, &input_state);
+        params.rice_k = k;
+        params.block_size = BLOCK_SIZE_MAX;
+        params.prediction_strategy = PREDICTION_DIFF_ENCODING;
 
-  for (int i=0; i < sample_count; i++) {
-    //printf("%d ", accel.x[i]);
-  }
+        build_stream_fir(order, history, &input_state);
 
-  // Output data
-  Vect accel_out = {};
-  Vect gyro_out = {};
-  Vect mag_out = {};
-  accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-  mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-  Position output_pos = {NULL, NULL, &accel_out};
-  Orientation output_orient = {&mag_out, &gyro_out, NULL};
-  ObjectState output_state = {};
-  //build_object_state(&output_pos, &output_orient, order, hist, &output_state);
+        for (int i=0; i < sample_count; i++) {
+          //printf("%d ", accel.x[i]);
+        }
 
-
-  // @TODO(David): how do I know this is big enough?!
-  uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 1000); // worse than .1 compression ratio will seg fault
-  CompressedDataWriter data_writer = {};
-  data_writer.data_out = data_out;
-
-  params.rice_k = k;
-  params.block_size = BLOCK_SIZE_MAX;
-  params.prediction_strategy = PREDICTION_DIFF_ENCODING;
+        // Initialize output data
+        Vect accel_out = {};
+        Vect gyro_out = {};
+        Vect mag_out = {};
+        accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+        accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+        accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+        gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+        gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+        gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+        mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+        mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+        mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+        Position output_pos = {NULL, NULL, &accel_out};
+        Orientation output_orient = {&mag_out, &gyro_out, NULL};
+        ObjectState output_state = {};
+        output_state.position = output_pos;
+        output_state.orientation = output_orient;
+        build_stream_fir(order, history, &output_state);
 
 
-  //encode_block(&input_state, &data_writer);
-  encode_data(&input_state, &data_writer);
-  uint32_t block_len = data_writer.bit_pointer >> 3;
+        // @TODO(David): how do I know this is big enough?!
+        uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 1000); // worse than .1 compression ratio will seg fault
+        CompressedDataWriter data_writer = {};
+        data_writer.data_out = data_out;
 
 
-  // Decode the data we just compressed to check for errors
-  CompressedDataReader data_reader = {};
-  data_reader.data_in = data_out;
-
-  //decode_block(&data_reader, &output_state, sample_count);
-  //decode_data(&data_reader, &output_state, sample_count);
-  //check_errors(&input_state, &output_state);
-
-  //printf("RICE K: %d\n", params.rice_k);
-  //printf("Block size: %d\n", params.block_size);
-  //printf("Output byte len: %d\n", (int)block_len);
-  //printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
-  double cr =  ((double)(sample_count*2*9)/block_len);
-  if (cr > best_cr) {
-    best_k = k;
-    best_cr = cr;
-  }
-  if (data_out)
-    free(data_out);
+        encode_data(&input_state, &data_writer);
+        uint32_t block_len = data_writer.bit_pointer >> 3;
 
 
-      }
-  printf("order: %d, hist: %d, k: %d, CR: %f\n", order, hist, best_k, best_cr);
-      if (order == 0) hist += 100;
-    }
-  }
+        // Decode the data we just compressed to check for errors
+        CompressedDataReader data_reader = {};
+        data_reader.data_in = data_out;
+
+        decode_data(&data_reader, &output_state, sample_count);
+        check_errors(&input_state, &output_state);
+
+        //printf("RICE K: %d\n", params.rice_k);
+        //printf("Block size: %d\n", params.block_size);
+        //printf("Output byte len: %d\n", (int)block_len);
+        //printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
+        double cr =  ((double)(sample_count*2*9)/block_len);
+        if (cr > best_cr) {
+          best_k = k;
+          best_cr = cr;
+        }
+        if (data_out)
+          free(data_out);
+      } // k
+      printf("order: %d, history: %d, k: %d, CR: %f\n", order, history, best_k, best_cr);
+      if (order == 0) history += 100;
+    } // history
+  } // order
 
   return 0;
-}
+} // main
