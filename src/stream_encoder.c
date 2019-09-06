@@ -195,6 +195,8 @@ int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
   }
   return 0;
 }
+/// @TODO(David): if we are decoding blocks, we need to make sure to reset FIR history to recover
+// from dropped packets
 int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
   for (uint32_t sample=0; sample < sample_count; sample++) {
     for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
@@ -252,18 +254,18 @@ int load_sensor_data(ObjectState *input_state, int *sample_count) {
   close(fd);
   gyro->data_len = *sample_count;
 
-  input_state->orientation.orient = malloc(sizeof(Vect));
-  Vect *mag = input_state->orientation.orient;
-  fd = open("../data/raw_data/0_MagX", O_RDONLY, 0);
-  mag->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_MagY", O_RDONLY, 0);
-  mag->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  fd = open("../data/raw_data/0_MagZ", O_RDONLY, 0);
-  mag->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  mag->data_len = *sample_count;
+  //input_state->orientation.orient = malloc(sizeof(Vect));
+  //Vect *mag = input_state->orientation.orient;
+  //fd = open("../data/raw_data/0_MagX", O_RDONLY, 0);
+  //mag->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  //close(fd);
+  //fd = open("../data/raw_data/0_MagY", O_RDONLY, 0);
+  //mag->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  //close(fd);
+  //fd = open("../data/raw_data/0_MagZ", O_RDONLY, 0);
+  //mag->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
+  //close(fd);
+  //mag->data_len = *sample_count;
   return 0;
 }
 
@@ -291,18 +293,18 @@ int main() {
         // Initialize output data
         Vect accel_out = {};
         Vect gyro_out = {};
-        Vect mag_out = {};
+        //Vect mag_out = {};
         accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
         accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
         accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
         gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
         gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
         gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-        mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-        mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-        mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
+        //mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
+        //mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
+        //mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
         Position output_pos = {NULL, NULL, &accel_out};
-        Orientation output_orient = {&mag_out, &gyro_out, NULL};
+        Orientation output_orient = {NULL, &gyro_out, NULL};
         ObjectState output_state = {};
         output_state.position = output_pos;
         output_state.orientation = output_orient;
@@ -330,7 +332,7 @@ int main() {
         //printf("Block size: %d\n", params.block_size);
         //printf("Output byte len: %d\n", (int)block_len);
         //printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
-        double cr =  ((double)(sample_count*2*9)/block_len);
+        double cr =  ((double)(sample_count*2*6)/block_len);
         if (cr > best_cr) {
           best_k = k;
           best_cr = cr;
