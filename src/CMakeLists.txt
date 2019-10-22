@@ -5,3 +5,6 @@ target_link_libraries(stream fixmath)
 
 add_executable(test_fir test_fir.c fir_predictive_filter.c)
 target_link_libraries(test_fir fixmath)
+
+add_executable(tmp tmp.c)
+target_link_libraries(fixmath)
