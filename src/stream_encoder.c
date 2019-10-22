@@ -149,6 +149,23 @@ int load_sensor_data(ObjectState *input_state, int *sample_count) {
   return 0;
 }
 
+int init_empty_object_state(ObjectState *object_state, int sample_count) {
+  // Initialize output data
+  object_state->position = (Position){NULL, NULL, malloc(sizeof(Vect))};
+  object_state->orientation = (Orientation){NULL, malloc(sizeof(Vect)), NULL};
+
+  Vect *accel_out = object_state->position.accel;
+  Vect *gyro_out = object_state->orientation.rot_vel;
+
+  accel_out->x = calloc(1, sizeof(uint16_t) * sample_count);
+  accel_out->y = calloc(1, sizeof(uint16_t) * sample_count);
+  accel_out->z = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out->x = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out->y = calloc(1, sizeof(uint16_t) * sample_count);
+  gyro_out->z = calloc(1, sizeof(uint16_t) * sample_count);
+  return 0;
+}
+
 int main() {
   ObjectState input_state;
   int sample_count;
@@ -166,28 +183,10 @@ int main() {
 
         build_stream_fir(order, history, &input_state);
 
-        for (int i=0; i < sample_count; i++) {
-          //printf("%d ", accel.x[i]);
-        }
 
-        // Initialize output data
-        Vect accel_out = {};
-        Vect gyro_out = {};
-        //Vect mag_out = {};
-        accel_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-        accel_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-        accel_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-        gyro_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-        gyro_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-        gyro_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-        //mag_out.x = calloc(1, sizeof(uint16_t) * sample_count);
-        //mag_out.y = calloc(1, sizeof(uint16_t) * sample_count);
-        //mag_out.z = calloc(1, sizeof(uint16_t) * sample_count);
-        Position output_pos = {NULL, NULL, &accel_out};
-        Orientation output_orient = {NULL, &gyro_out, NULL};
+
         ObjectState output_state = {};
-        output_state.position = output_pos;
-        output_state.orientation = output_orient;
+        init_empty_object_state(&output_state, sample_count);
         build_stream_fir(order, history, &output_state);
 
 
