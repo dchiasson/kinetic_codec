@@ -1,3 +1,6 @@
+#ifndef __data_format_h__
+#define __data_format_h__
+#include "fir_predictive_filter.h"
 
 typedef struct{
   int16_t *x;
@@ -48,3 +51,4 @@ typedef struct{
   int block_size;
   int prediction_strategy;
 }Parameters;
+#endif // __data_format_h__

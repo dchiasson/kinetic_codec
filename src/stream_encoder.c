@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "fir_predictive_filter.h"
 #include "data_format.h"
+#include "encode.h"
 
 #define BLOCK_SIZE_MAX (-1)
 #define PREDICTION_DIFF_ENCODING 1
@@ -62,79 +63,6 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
   close(fd);
 }
 
-void put_bit(uint8_t bit, CompressedDataWriter *data_writer)
-{
-  data_writer->data_out[data_writer->bit_pointer >> 3] |= (bit & 1) << (data_writer->bit_pointer & 7);
-  (data_writer->bit_pointer)++;
-}
-
-uint8_t get_bit(CompressedDataReader *data_reader) {
-  uint8_t bit;
-  bit = (data_reader->data_in[data_reader->bit_pointer >> 3] >> (data_reader->bit_pointer & 7)) & 1;
-  data_reader->bit_pointer++;
-  return bit;
-}
-
-void put_word(uint16_t word, CompressedDataWriter *data_writer) {
-  // Big endian
-  data_writer->bit_pointer += 8 - (data_writer->bit_pointer & 0b111); // pad with zeros till byte boundary
-  data_writer->data_out[data_writer->bit_pointer >> 3] = word >> 8 & 0xff;
-  data_writer->bit_pointer += 8;
-  data_writer->data_out[data_writer->bit_pointer >> 3] = word & 0xff;
-  data_writer->bit_pointer += 8;
-}
-
-uint16_t get_word(CompressedDataReader *data_reader) {
-  // Big endian
-  data_reader->bit_pointer += 8 - (data_reader->bit_pointer & 0b111); // padded with zeros till byte boundary
-  uint16_t val = 0;
-  val |= data_reader->data_in[data_reader->bit_pointer >> 3] << 8;
-  data_reader->bit_pointer += 8;
-  val |= data_reader->data_in[data_reader->bit_pointer >> 3];
-  data_reader->bit_pointer += 8;
-  return val;
-}
-
-
-void put_vector_0(Vect *vect, CompressedDataWriter *data_writer) {
-    put_word(vect->x[0], data_writer);
-    put_word(vect->y[0], data_writer);
-    put_word(vect->z[0], data_writer);
-}
-
-/// @TODO(David): Use the FLAC functions, they are way more efficient
-void rice_encode(int32_t res, CompressedDataWriter *data_writer) {
-  uint16_t residual;
-  if (res < 0) // negative is odd
-    residual = -res*2-1;
-  else // positive is even
-    residual = res*2;
-  //printf("%lu : %d \n", data_writer->bit_pointer, residual);
-  // exponent
-  data_writer->bit_pointer += residual >> params.rice_k; // faster than put_bit
-  // one termination
-  put_bit(1, data_writer);
-  // remainder
-  for (int i=0; i < params.rice_k; i++) {
-    put_bit((residual >> i) & 1, data_writer);
-  }
-}
-
-int32_t rice_decode(CompressedDataReader *data_reader) {
-  uint16_t res = 0;
-  while (!get_bit(data_reader)) {
-    res++;
-  }
-  res <<= params.rice_k;
-  for (int i=0; i < params.rice_k; i++) {
-    res += (get_bit(data_reader) << i);
-  }
-  if (res & 1) { // odd is negative
-    return -(res + 1) / 2;
-  } else { // even is positive
-    return res / 2;
-  }
-}
 
 /// @TODO(David): support block sizes
 int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
@@ -142,7 +70,7 @@ int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
   for (uint32_t sample=0; sample < sample_count; sample++) {
     for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
       int32_t res = get_fir_residual(input_state->stream_fir.pointers[stream][sample], &input_state->stream_fir.fir_state[stream]);
-      rice_encode(res, data_writer);
+      rice_encode(res, data_writer, params);
     }
   }
   return 0;
@@ -152,7 +80,7 @@ int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
 int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
   for (uint32_t sample=0; sample < sample_count; sample++) {
     for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
-      output_state->stream_fir.pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader), &output_state->stream_fir.fir_state[stream]);
+      output_state->stream_fir.pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.fir_state[stream]);
     }
   }
   return 0;
