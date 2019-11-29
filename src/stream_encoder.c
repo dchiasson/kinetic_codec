@@ -35,16 +35,15 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
     }
   }
   if (orientation) {
-    /// @TODO(David): Change this order
-    if(orientation->rot_vel) {
-      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->x;
-      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->y;
-      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->z;
-    }
     if(orientation->orient) {
       stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->x;
       stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->y;
       stream_fir->pointers[stream_fir->pointer_count++] = orientation->orient->z;
+    }
+    if(orientation->rot_vel) {
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->x;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->y;
+      stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_vel->z;
     }
     if(orientation->rot_accel) {
       stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_accel->x;
@@ -54,7 +53,9 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
   }
   int fd;
   char buffer[50];
-  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
+  ///@TODO(David): Check that this file exists first!!
+  //sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
+  sprintf(buffer, "../data/natural_spline_pred/condition%d/%d", order, history);
   fd = open(buffer, O_RDONLY, 0);
   int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
   for (int i=0; i<18; i++) {
@@ -105,7 +106,8 @@ int load_sensor_data(ObjectState *input_state, int *sample_count) {
   int fd;
   /// @TODO(David): write a function to free an munmap sensor data
   //*sample_count = 965286;
-  *sample_count = 6167;
+  //*sample_count = 6167;
+  *sample_count = 2471;
 
   // Read in input data
   input_state->position.accel = malloc(sizeof(Vect));
@@ -172,18 +174,16 @@ int main() {
 
   load_sensor_data(&input_state, &sample_count);
 
-  for (int order=0; order<=6; order++) {
-    for (int history=order; history<7; history++) {
+  for (int order=0; order<=4; order++) {
+    for (int history=2; history<10; history++) {
       int best_k = 0;
       double best_cr = 0;
-      for (int k=6; k<14; k++) {
+      for (int k=4; k<14; k++) {
         params.rice_k = k;
         params.block_size = BLOCK_SIZE_MAX;
         params.prediction_strategy = PREDICTION_DIFF_ENCODING;
 
         build_stream_fir(order, history, &input_state);
-
-
 
         ObjectState output_state = {};
         init_empty_object_state(&output_state, sample_count);
@@ -207,10 +207,6 @@ int main() {
         decode_data(&data_reader, &output_state, sample_count);
         check_errors(&input_state, &output_state);
 
-        //printf("RICE K: %d\n", params.rice_k);
-        //printf("Block size: %d\n", params.block_size);
-        //printf("Output byte len: %d\n", (int)block_len);
-        //printf("Compression ratio: %f\n", ((double)(sample_count*2*9)/block_len));
         double cr =  ((double)(sample_count*2*6)/block_len);
         if (cr > best_cr) {
           best_k = k;
@@ -220,7 +216,7 @@ int main() {
           free(data_out);
       } // k
       printf("order: %d, history: %d, k: %d, CR: %f\n", order, history, best_k, best_cr);
-      if (order == 0) history += 100;
+      //if (order == 0) history += 100;
     } // history
   } // order
 

@@ -22,12 +22,11 @@ figure = 0
 conditions = [NATURAL, END_SLOPE_0, PERIODIC, CONSERVATIVE, NOT_A_KNOT] = range(5)
 boundary_condition = NATURAL
 
-
-n = 3 # uses past n + 1 samples
-
 for boundary_condition in conditions:
     print("condition {}:".format(boundary_condition))
-    for n in range(2,10):
+    for n in range(2,10): # uses the past n+1 samples
+        while boundary_condition == NOT_A_KNOT and n < 4:
+            n +=1
         dir_name = 'natural_spline_pred/condition{}'.format(boundary_condition)
         try:
             os.makedirs(dir_name)

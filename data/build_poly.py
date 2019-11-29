@@ -19,7 +19,7 @@ for m in range(1, 7): # polynomial order
     except OSError:
         pass
     #for n in list(range(m, 100)) + [2**i for i in range(4, 15)]:
-    for n in range(m, 7):
+    for n in range(m, 20):
         print("computing m={}, n={}".format(m, n))
         x = np.matrix([[b**a for a in range(m)] for b in range(n)], np.double)
         n_p1 = np.matrix([(n) ** a for a in range(m)], np.double)

@@ -12,7 +12,6 @@ import quaternion
 import scipy.fftpack
 
 #file_name='HuGaDB_v1_walking_14_02.txt'
-#file_name='david_gyro_data-2019-10-02-06-39-44.csv'
 file_name='rot_only_trial.csv'
 ACCEL_FIX = 100
 GYRO_FIX = 16
@@ -26,7 +25,7 @@ with open(file_name, 'r') as csvfile:
     header = next(reader)
     for row in reader:
         #print(row)
-        n = 9
+        n = 0
         #a_x.append(round(float(row[0+n])*ACCEL_FIX))
         #a_y.append(round(float(row[1+n])*ACCEL_FIX))
         #a_z.append(round(float(row[2+n])*ACCEL_FIX))
@@ -151,31 +150,31 @@ if __name__ == "__main__":
 
     # predict 9.8m/s instead of just a rotation
 
-    print(get_a(0))
-    print(get_g(0))
-    pred = ideal_rot(get_a(0), get_g(0))
-    print(pred)
-    print(get_a(1))
-
     diff_error=[]
     pred_error=[]
+    smooth_error=[]
     lin_error=[]
     a_norm=[]
     D = 0
+    a_state = np.r_[0.0,0.0,0.0]
     for n in range(D, 1000 + D):
-        pred = ideal_rot(get_a(n), get_g(n-D)) #past gyro
+        #pred = ideal_rot(get_a(n), get_g(n-D)) #past gyro
         lin_pred =  linearized_rot(get_a(n), get_g(n-D))
         #pred = ideal_rot(get_a(n), get_g(n+1)) #current gryo
-        #pred = ideal_rot(get_a(n), (get_g(n) + get_g(n+1))/2) #average past and current (trapezoidal integration)
+        pred = ideal_rot(get_a(n), (get_g(n) + get_g(n+1))/2) #average past and current (trapezoidal integration)
+        p = .95
+        a_state = ideal_rot((p*get_a(n)+(1-p)*a_state), (get_g(n) + get_g(n+1))/2)
         diff_error.append(norm(get_a(n+1) - get_a(n)))
         pred_error.append(norm(get_a(n+1) - pred))
         lin_error.append(norm(get_a(n+1) - lin_pred))
+        smooth_error.append(norm(get_a(n+1) - a_state))
         a_norm.append(norm(get_a(n+1)))
-        print(" real {} = g {} = pred {} = lin {}".format(get_a(n+1), get_g(n), pred, lin_pred))
+        #print(" real {} = g {} = pred {} = lin {}".format(get_a(n+1), get_g(n), pred, lin_pred))
 
 
     print("diff {}".format(sum(diff_error)))
     print("pred {}".format(sum(pred_error)))
+    print("smooth {}".format(sum(smooth_error)))
     print("lin {}".format(sum(lin_error)))
     print("norm {}".format(sum(a_norm)))
 
@@ -186,6 +185,7 @@ if __name__ == "__main__":
     plt.plot(x, diff_error, label="diff")
     #plt.subplot(2,1,2)
     plt.plot(x, pred_error, label="pred")
+    plt.plot(x, smooth_error, label="smooth")
     plt.plot(x, a_norm, label="mag")
     #plt.plot(x, a_x[0:1000])
     #plt.subplot(3,1,2)

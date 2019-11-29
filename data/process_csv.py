@@ -9,6 +9,8 @@ representation.
 
 This process is not guaranteed to be lossless or reversable as guesses are made
 about original data precision and quantization levels.
+
+Assumes first row is the header
 """
 import sys
 import logging
