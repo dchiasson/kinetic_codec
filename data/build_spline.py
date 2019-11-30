@@ -108,14 +108,7 @@ for boundary_condition in conditions:
         rx = np.matrix(rx)
 
         fir = rx * A**-1 * Ry
-        mmap_file = np.memmap(os.path.join(dir_name, str(n)), dtype=np.int32, mode='w+', shape=np.shape(fir))
-        # conversion to libfixmath fix16_t type
-        # see `fix16_t_from_float` in fix16.h
-        fixed_fir = (fir * 0x10000)
-        fixed_fir = np.multiply((fixed_fir >= 0), fixed_fir + 0.5) + np.multiply((fixed_fir < 0), fixed_fir - 0.5)
-        fixed_fir = fixed_fir.astype(np.int32)
-        mmap_file[:] = fixed_fir
-        mmap_file.flush()
+        data_tools.save_array(fir, os.path.join(dir_name, str(n)))
 
         if TESTING:
             # Plot the whole spline to confirm that it has desired behavior

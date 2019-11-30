@@ -52,15 +52,22 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
     }
   }
   int fd;
-  char buffer[50];
+  char buffer[100];
   ///@TODO(David): Check that this file exists first!!
   //sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
-  sprintf(buffer, "../data/natural_spline_pred/condition%d/%d", order, history);
+  //sprintf(buffer, "../data/natural_spline_pred/condition%d/%d", order, history);
+  sprintf(buffer, "../machine_learning/cross_fir/test_coefs");
   fd = open(buffer, O_RDONLY, 0);
-  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
+  //int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
+  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*20*6, PROT_READ, MAP_SHARED, fd, 0);
   for (int i=0; i<18; i++) {
-    init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
+    //init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
+    for (int j=0; j<6; j++) {
+      init_fir_filter(&poly_reg[20*j], 20, &stream_fir->cross_fir_state[i].stream_state[j]);
+    }
   }
+  //stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
+  stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
   close(fd);
 }
 
@@ -69,21 +76,56 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
 int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
   uint32_t sample_count = input_state->position.accel->data_len;
   for (uint32_t sample=0; sample < sample_count; sample++) {
-    for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
-      int32_t res = get_fir_residual(input_state->stream_fir.pointers[stream][sample], &input_state->stream_fir.fir_state[stream]);
-      rice_encode(res, data_writer, params);
-    }
-  }
+    if (input_state->stream_fir.filter_type == FILTER_TYPE__AUTO_FIR) {
+      for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
+        int32_t res = get_fir_residual(
+            input_state->stream_fir.pointers[stream][sample],
+            &input_state->stream_fir.fir_state[stream]);
+        rice_encode(res, data_writer, params);
+      }
+    } else if (input_state->stream_fir.filter_type == FILTER_TYPE__CROSS_FIR) {
+      for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
+        int32_t res = get_cross_fir_residual(
+            input_state->stream_fir.pointers[stream][sample],
+            &input_state->stream_fir.cross_fir_state[stream]);
+        rice_encode(res, data_writer, params);
+      }
+      for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
+        update_cross_fir_filters(
+            input_state->stream_fir.pointers[stream][sample],
+            &input_state->stream_fir.cross_fir_state[stream],
+            stream);
+      }
+    } else {
+      printf("ERROR unknown filter type: %d", input_state->stream_fir.filter_type);
+    } // filter type
+  } // for time sample
   return 0;
 }
 /// @TODO(David): if we are decoding blocks, we need to make sure to reset FIR history to recover
 // from dropped packets
 int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
   for (uint32_t sample=0; sample < sample_count; sample++) {
-    for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
-      output_state->stream_fir.pointers[stream][sample] = decode_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.fir_state[stream]);
-    }
-  }
+    if (output_state->stream_fir.filter_type == FILTER_TYPE__AUTO_FIR) {
+      for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+        output_state->stream_fir.pointers[stream][sample] = 
+          decode_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.fir_state[stream]);
+      }
+    } else if (output_state->stream_fir.filter_type == FILTER_TYPE__CROSS_FIR) {
+      for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+        output_state->stream_fir.pointers[stream][sample] =
+          decode_cross_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.cross_fir_state[stream]);
+      }
+      for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+        update_cross_fir_filters(
+         output_state->stream_fir.pointers[stream][sample],
+         &output_state->stream_fir.cross_fir_state[stream],
+         stream);
+      }
+    } else {
+      printf("ERROR unknown filter type: %d", output_state->stream_fir.filter_type);
+    }// filter type
+  } // for time sample
   return 0;
 }
 

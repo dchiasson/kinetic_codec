@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-import os
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data'))
+import data_tools
+
 import pandas
 #import tensorflow as tf
 import numpy as np
@@ -31,14 +34,11 @@ def compute_zeros(b_vec):
     y[n] = \summation b_k*x[n-k] 
     """
 
-    #print(b_vec)
     if (b_vec==0.0).all():
         return np.array([]), 0
     zeros = np.roots(b_vec)
     poly = np.poly(zeros)
-    print("compute zeros")
-    #print(b_vec)
-    #print(poly)
+    print("computed zeros:")
     print(zeros)
     return zeros, b_vec[0]/poly[0]
 
@@ -92,6 +92,13 @@ if __name__ == '__main__':
     print(reg.coef_)
     print(np.linalg.norm(reg.coef_, ord=1))
     print(np.linalg.norm(reg.coef_, ord=2))
+
+    dir_name = 'cross_fir'
+    try:
+        os.makedirs(dir_name)
+    except OSError:
+        pass
+    data_tools.save_array(reg.coef_, os.path.join(dir_name, 'test_coefs'))
 
     # plot the poles and zeros!
     for var in range(6):

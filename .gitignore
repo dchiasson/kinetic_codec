@@ -1,5 +1,8 @@
 compile
 bin
+*.pyc
+*.gz
+*.zip
 
 # Prerequisites
 *.d

@@ -25,8 +25,10 @@ typedef struct{
 
 typedef struct{
   int16_t *pointers[18];
-  FIRFilterState fir_state[18];
   int pointer_count;
+  FIRFilterState fir_state[18];
+  CrossFIRFilterState cross_fir_state[18];
+  int filter_type;
 }StreamFir;
 
 typedef struct{
