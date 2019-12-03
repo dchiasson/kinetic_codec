@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include "fir_predictive_filter.h"
 #include "data_format.h"
 #include "encode.h"
@@ -54,28 +55,34 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
   int fd;
   char buffer[100];
   ///@TODO(David): Check that this file exists first!!
-  //sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
+  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
   //sprintf(buffer, "../data/natural_spline_pred/condition%d/%d", order, history);
-  sprintf(buffer, "../machine_learning/cross_fir/test_coefs");
+  //sprintf(buffer, "../machine_learning/cross_fir/test_coefs");
   fd = open(buffer, O_RDONLY, 0);
-  //int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
-  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*20*6, PROT_READ, MAP_SHARED, fd, 0);
+  //strcat(buffer, "\n");
+  //printf(buffer);
+  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
+  //int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*20*6, PROT_READ, MAP_SHARED, fd, 0);
   for (int i=0; i<18; i++) {
-    //init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
-    for (int j=0; j<6; j++) {
-      init_fir_filter(&poly_reg[20*j], 20, &stream_fir->cross_fir_state[i].stream_state[j]);
-    }
+    init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
+    //for (int j=0; j<6; j++) {
+    //  init_fir_filter(&poly_reg[20*j], 20, &stream_fir->cross_fir_state[i].stream_state[j]);
+    //}
   }
-  //stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
-  stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
+  stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
+  //stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
   close(fd);
 }
 
 
 /// @TODO(David): support block sizes
-int encode_data(ObjectState *input_state, CompressedDataWriter *data_writer) {
+int encode_data(int max_output_size, ObjectState *input_state, CompressedDataWriter *data_writer) {
   uint32_t sample_count = input_state->position.accel->data_len;
   for (uint32_t sample=0; sample < sample_count; sample++) {
+    if ((data_writer->bit_pointer >> 3) > 0.8 * max_output_size) {
+       printf("Output buffer running out of space\n");
+       return 1;
+    }
     if (input_state->stream_fir.filter_type == FILTER_TYPE__AUTO_FIR) {
       for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
         int32_t res = get_fir_residual(
@@ -136,44 +143,60 @@ int check_errors(ObjectState *input_state, ObjectState *output_state) {
     for (int s=0; s < (int)sample_count; s++) {
       if (output_state->stream_fir.pointers[p][s] != input_state->stream_fir.pointers[p][s]) {
         printf("ERROR p: %d s: %d\n",p,s);
-        exit(1);
-        break;
+        return 1;
       }
     }
   }
   return 0;
 }
 
-int load_sensor_data(ObjectState *input_state, int *sample_count) {
-  int fd;
+int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample_count) {
   /// @TODO(David): write a function to free an munmap sensor data
-  //*sample_count = 965286;
-  //*sample_count = 6167;
-  *sample_count = 2471;
+  int fd;
+  char file_name[500];
 
   // Read in input data
   input_state->position.accel = malloc(sizeof(Vect));
   Vect *accel = input_state->position.accel;
-  fd = open("../data/raw_data/0_AccelX", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "acc_x");
+  fd = open(file_name, O_RDONLY, 0);
+  FILE* fp = fdopen(fd, "r");
+  fseek(fp, 0L, SEEK_END); // assume all streams are same length
+  *sample_count = ftell(fp) / sizeof(int16_t);
+  //printf("size %d\n", *sample_count);
+  //fflush(stdout);
+  fseek(fp, 0L, SEEK_SET);
+
   accel->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  fd = open("../data/raw_data/0_AccelY", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "acc_y");
+  fd = open(file_name, O_RDONLY, 0);
   accel->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  fd = open("../data/raw_data/0_AccelZ", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "acc_z");
+  fd = open(file_name, O_RDONLY, 0);
   accel->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   accel->data_len = *sample_count;
 
   input_state->orientation.rot_vel = malloc(sizeof(Vect));
   Vect *gyro = input_state->orientation.rot_vel;
-  fd = open("../data/raw_data/0_GyroX", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "gyro_x");
+  fd = open(file_name, O_RDONLY, 0);
   gyro->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  fd = open("../data/raw_data/0_GyroY", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "gyro_y");
+  fd = open(file_name, O_RDONLY, 0);
   gyro->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  fd = open("../data/raw_data/0_GyroZ", O_RDONLY, 0);
+  strcpy(file_name, data_dir);
+  strcat(file_name, "gyro_z");
+  fd = open(file_name, O_RDONLY, 0);
   gyro->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   gyro->data_len = *sample_count;
@@ -210,16 +233,24 @@ int init_empty_object_state(ObjectState *object_state, int sample_count) {
   return 0;
 }
 
-int main() {
+int main(int argc, char** argv) {
   ObjectState input_state;
   int sample_count;
 
-  load_sensor_data(&input_state, &sample_count);
+  char *data_loc;
+  if (argc > 1) {
+    data_loc = argv[1];
+  } else {
+    data_loc = "../data/raw_data/";
+  }
 
-  for (int order=0; order<=4; order++) {
-    for (int history=2; history<10; history++) {
+  load_sensor_data(data_loc, &input_state, &sample_count);
+
+  for (int order=6; order<=6; order++) {
+    for (int history=order; history<20; history++) {
       int best_k = 0;
       double best_cr = 0;
+      double best_block_len = 0;
       for (int k=4; k<14; k++) {
         params.rice_k = k;
         params.block_size = BLOCK_SIZE_MAX;
@@ -233,12 +264,17 @@ int main() {
 
 
         // @TODO(David): how do I know this is big enough?!
-        uint8_t *data_out = calloc(1, sample_count * 9 * 2 * 1000); // worse than .1 compression ratio will seg fault
+        int max_output_size = sample_count * 6 * 2 * 200;
+        uint8_t *data_out = calloc(1, max_output_size); // worse than .01 compression ratio will seg fault
+        if (!data_out) {
+          printf("calloc failed!\n");
+          return 1;
+        }
         CompressedDataWriter data_writer = {};
         data_writer.data_out = data_out;
 
 
-        encode_data(&input_state, &data_writer);
+        encode_data(max_output_size, &input_state, &data_writer);
         uint32_t block_len = data_writer.bit_pointer >> 3;
 
 
@@ -247,17 +283,29 @@ int main() {
         data_reader.data_in = data_out;
 
         decode_data(&data_reader, &output_state, sample_count);
-        check_errors(&input_state, &output_state);
+        if (check_errors(&input_state, &output_state)) {
+          continue;
+        }
 
         double cr =  ((double)(sample_count*2*6)/block_len);
         if (cr > best_cr) {
           best_k = k;
           best_cr = cr;
+          best_block_len = block_len;
+        } else {
+          k+=10;
         }
-        if (data_out)
+        if (data_out) {
           free(data_out);
+          free(output_state.position.accel->x);
+          free(output_state.position.accel->y);
+          free(output_state.position.accel->z);
+          free(output_state.orientation.rot_vel->x);
+          free(output_state.orientation.rot_vel->y);
+          free(output_state.orientation.rot_vel->z);
+        }
       } // k
-      printf("order: %d, history: %d, k: %d, CR: %f\n", order, history, best_k, best_cr);
+      printf("order: %d, history: %d, k: %d, CR: %f fin_size: %f\n", order, history, best_k, best_cr, best_block_len);
       //if (order == 0) history += 100;
     } // history
   } // order

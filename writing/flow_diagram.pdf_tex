@@ -1,0 +1,119 @@
+%% Creator: Inkscape inkscape 0.92.3, www.inkscape.org
+%% PDF/EPS/PS + LaTeX output extension by Johan Engelen, 2010
+%% Accompanies image file 'flow_diagram.pdf' (pdf, eps, ps)
+%%
+%% To include the image in your LaTeX document, write
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics{<filename>.pdf}
+%% To scale the image, write
+%%   \def\svgwidth{<desired width>}
+%%   \input{<filename>.pdf_tex}
+%%  instead of
+%%   \includegraphics[width=<desired width>]{<filename>.pdf}
+%%
+%% Images with a different path to the parent latex file can
+%% be accessed with the `import' package (which may need to be
+%% installed) using
+%%   \usepackage{import}
+%% in the preamble, and then including the image with
+%%   \import{<path to file>}{<filename>.pdf_tex}
+%% Alternatively, one can specify
+%%   \graphicspath{{<path to file>/}}
+%% 
+%% For more information, please see info/svg-inkscape on CTAN:
+%%   http://tug.ctan.org/tex-archive/info/svg-inkscape
+%%
+\begingroup%
+  \makeatletter%
+  \providecommand\color[2][]{%
+    \errmessage{(Inkscape) Color is used for the text in Inkscape, but the package 'color.sty' is not loaded}%
+    \renewcommand\color[2][]{}%
+  }%
+  \providecommand\transparent[1]{%
+    \errmessage{(Inkscape) Transparency is used (non-zero) for the text in Inkscape, but the package 'transparent.sty' is not loaded}%
+    \renewcommand\transparent[1]{}%
+  }%
+  \providecommand\rotatebox[2]{#2}%
+  \newcommand*\fsize{\dimexpr\f@size pt\relax}%
+  \newcommand*\lineheight[1]{\fontsize{\fsize}{#1\fsize}\selectfont}%
+  \ifx\svgwidth\undefined%
+    \setlength{\unitlength}{764.12310215bp}%
+    \ifx\svgscale\undefined%
+      \relax%
+    \else%
+      \setlength{\unitlength}{\unitlength * \real{\svgscale}}%
+    \fi%
+  \else%
+    \setlength{\unitlength}{\svgwidth}%
+  \fi%
+  \global\let\svgwidth\undefined%
+  \global\let\svgscale\undefined%
+  \makeatother%
+  \begin{picture}(1,0.46885877)%
+    \lineheight{1}%
+    \setlength\tabcolsep{0pt}%
+    \put(0,0){\includegraphics[width=\unitlength,page=1]{flow_diagram.pdf}}%
+    \put(0.09355664,0.4231568){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=2]{flow_diagram.pdf}}%
+    \put(0.09355665,0.36917336){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=3]{flow_diagram.pdf}}%
+    \put(0.09355665,0.29065197){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=4]{flow_diagram.pdf}}%
+    \put(0.18837168,0.26674691){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=5]{flow_diagram.pdf}}%
+    \put(0.18837168,0.34526829){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=6]{flow_diagram.pdf}}%
+    \put(0.18837166,0.39925174){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=7]{flow_diagram.pdf}}%
+    \put(0.09355666,0.21703818){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=8]{flow_diagram.pdf}}%
+    \put(0.09355666,0.16305474){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=9]{flow_diagram.pdf}}%
+    \put(0.09355666,0.08453335){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=10]{flow_diagram.pdf}}%
+    \put(0.18837168,0.06062829){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=11]{flow_diagram.pdf}}%
+    \put(0.18837167,0.13914968){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=12]{flow_diagram.pdf}}%
+    \put(0.18837166,0.19313312){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=13]{flow_diagram.pdf}}%
+    \put(0.36763593,0.40019579){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}-\end{tabular}}}}%
+    \put(0.2078165,0.41130344){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083331}\smash{\begin{tabular}[t]{l}Prediction\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=14]{flow_diagram.pdf}}%
+    \put(0.40079774,0.39593595){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083331}\smash{\begin{tabular}[t]{l}Residual\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=15]{flow_diagram.pdf}}%
+    \put(0.64222479,0.4231568){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=16]{flow_diagram.pdf}}%
+    \put(0.6422248,0.36917336){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=17]{flow_diagram.pdf}}%
+    \put(0.6422248,0.29065197){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=18]{flow_diagram.pdf}}%
+    \put(0.73703983,0.26674691){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=19]{flow_diagram.pdf}}%
+    \put(0.73703982,0.34526829){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=20]{flow_diagram.pdf}}%
+    \put(0.73703981,0.39925174){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=21]{flow_diagram.pdf}}%
+    \put(0.6422248,0.21703818){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=22]{flow_diagram.pdf}}%
+    \put(0.6422248,0.16305474){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=23]{flow_diagram.pdf}}%
+    \put(0.6422248,0.08453335){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}-1\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=24]{flow_diagram.pdf}}%
+    \put(0.73703983,0.06062829){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=25]{flow_diagram.pdf}}%
+    \put(0.73703982,0.13914968){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=26]{flow_diagram.pdf}}%
+    \put(0.73703981,0.19313312){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=27]{flow_diagram.pdf}}%
+    \put(0.75648465,0.41130344){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083331}\smash{\begin{tabular}[t]{l}Prediction\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=28]{flow_diagram.pdf}}%
+    \put(0.85776872,0.44669085){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083331}\smash{\begin{tabular}[t]{l}Residual\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=29]{flow_diagram.pdf}}%
+    \put(0.23835793,0.19772613){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083331}\smash{\begin{tabular}[t]{l}Encoder\end{tabular}}}}%
+    \put(0.80174886,0.20361521){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083337}\smash{\begin{tabular}[t]{l}Decoder\end{tabular}}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=30]{flow_diagram.pdf}}%
+    \put(0.91371295,0.39925176){\color[rgb]{0,0,0}\makebox(0,0)[lt]{\lineheight{0.52083325}\smash{\begin{tabular}[t]{l}+\end{tabular}}}}%
+  \end{picture}%
+\endgroup%
