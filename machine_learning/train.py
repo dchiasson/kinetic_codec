@@ -43,22 +43,24 @@ def compute_zeros(b_vec):
     return zeros, b_vec[0]/poly[0]
 
 
-HISTORY = 20
-def build_features(file_name):
-    file_name='HuGaDB_v1_walking_14_02.txt'
-    ACCEL_FIX = 2.0/32765
-    GYRO_FIX = 2000/32768
-    start = 12
-    cols = range(start, start+6)
+HISTORY = 2
+def build_features(file_name, axis):
+    #file_name='HuGaDB_v1_walking_14_02.txt'
+    #ACCEL_FIX = 2.0/32765
+    #GYRO_FIX = 2000/32768
+    #start = 12
+    #cols = range(start, start+6)
 
-    dataset = pandas.read_csv(file_name, sep='\t')
+    dataset = pandas.read_csv(file_name, sep=',')
     data_length = np.shape(dataset)[0]
     data_mat = dataset.as_matrix()
 
     features, labels = [], []
 
-    for start in range(0, 36, 6):
+    #for start in range(0, 36, 6):
+    for start in [axis]:
         cols = range(start, start+6)
+        cols = range(6)
         for time in range(HISTORY, data_length):
             example = []
             for col in cols:
@@ -67,39 +69,56 @@ def build_features(file_name):
             labels.append(data_mat[:,start][time]) # only train x_accel for now
     return np.asarray(features), np.asarray(labels)
 
-if __name__ == '__main__':
+def test():
+    fil_coef = np.zeros((6,6,5))
+    for thing in range(6):
+        fil_coef[thing][thing][4] = 1
+    dir_name = 'cross_fir'
+    data_tools.save_array(fil_coef, os.path.join(dir_name, 'test_coefs'))
+    print(fil_coef)
 
-    X, y = None, None
-    iteration = 0
-    for data_file in os.listdir(data_dir):
-        iteration +=1
-        if iteration < 20:
-            continue
-        if iteration > 21:
-            break
-        print("loading: {}".format(data_file))
-        if X is not None:
-            Xnew, ynew = build_features(data_file)
-            X = np.concatenate((X, Xnew))
-            y = np.concatenate((y, ynew))
-        else:
-            X, y = build_features(data_file)
+def data_train():
+    #X, y = None, None
+    #iteration = 0
+    #for data_file in os.listdir(data_dir):
+    #    data_path = os.path.join(data_dir, data_file)
+    #    iteration +=1
+    #    if iteration < 1:
+    #        continue
+    #    if iteration > 21:
+    #        break
+    #    print("loading: {}".format(data_file))
+    #    if X is not None:
+    #        Xnew, ynew = build_features(data_path)
+    #        X = np.concatenate((X, Xnew))
+    #        y = np.concatenate((y, ynew))
+    #    else:
+    #        X, y = build_features(data_path)
+    data_file = '/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/all_3.csv'
+    all_coeffs = []
+    for stream in range(6):
+        X, y = build_features(data_file, stream)
 
-    #reg = LinearRegression().fit(X,y)
-    reg = Lasso(alpha=.1, max_iter=2000).fit(X,y)
-    print(reg.score(X,y))
-    reg.coef_[np.abs(reg.coef_) < (1.0/16)] = 0
-    print(reg.coef_)
-    print(np.linalg.norm(reg.coef_, ord=1))
-    print(np.linalg.norm(reg.coef_, ord=2))
+        #reg = LinearRegression().fit(X,y)
+        reg = Lasso(alpha=.1, max_iter=2000).fit(X,y)
+        reg.coef_[np.abs(reg.coef_) < (1.0/16)] = 0
+        print(reg.coef_)
+        all_coeffs.append(reg.coef_)
+    all_coeffs = np.asarray(all_coeffs)
+    #print(reg.score(X,y))
+    #print(np.linalg.norm(reg.coef_, ord=1))
+    #print(np.linalg.norm(reg.coef_, ord=2))
 
     dir_name = 'cross_fir'
     try:
         os.makedirs(dir_name)
     except OSError:
         pass
-    data_tools.save_array(reg.coef_, os.path.join(dir_name, 'test_coefs'))
+    print("FINISHED")
+    print(all_coeffs)
+    data_tools.save_array(all_coeffs, os.path.join(dir_name, 'test_coefs'))
 
+    return
     # plot the poles and zeros!
     for var in range(6):
         b_vec = np.flip(reg.coef_[var*HISTORY:var*HISTORY+HISTORY])
@@ -117,3 +136,9 @@ if __name__ == '__main__':
     # Do I understand how to compute poles and zeros?
     # Are there any bugs in my code?
     # How do I interpret the results?
+    
+    # would this algorithm learn different coefficients for each the different body parts?
+
+if __name__ == '__main__':
+    data_train()
+    #test()

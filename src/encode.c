@@ -35,7 +35,7 @@ uint16_t get_word(CompressedDataReader *data_reader) {
 
 
 /// @TODO(David): Use the FLAC functions, they are way more efficient
-void rice_encode(int32_t res, CompressedDataWriter *data_writer, Parameters params) {
+void rice_encode(int32_t res, CompressedDataWriter *data_writer, uint8_t rice_k) {
   uint16_t residual;
   if (res < 0) // negative is odd
     residual = -res*2-1;
@@ -43,22 +43,22 @@ void rice_encode(int32_t res, CompressedDataWriter *data_writer, Parameters para
     residual = res*2;
   //printf("%lu : %d \n", data_writer->bit_pointer, residual);
   // exponent
-  data_writer->bit_pointer += residual >> params.rice_k; // faster than put_bit
+  data_writer->bit_pointer += residual >> rice_k; // faster than put_bit
   // one termination
   put_bit(1, data_writer);
   // remainder
-  for (int i=0; i < params.rice_k; i++) {
+  for (int i=0; i < rice_k; i++) {
     put_bit((residual >> i) & 1, data_writer);
   }
 }
 
-int32_t rice_decode(CompressedDataReader *data_reader, Parameters params) {
+int32_t rice_decode(CompressedDataReader *data_reader, uint8_t rice_k) {
   uint16_t res = 0;
   while (!get_bit(data_reader)) {
     res++;
   }
-  res <<= params.rice_k;
-  for (int i=0; i < params.rice_k; i++) {
+  res <<= rice_k;
+  for (int i=0; i < rice_k; i++) {
     res += (get_bit(data_reader) << i);
   }
   if (res & 1) { // odd is negative

@@ -49,7 +49,8 @@ typedef struct{
 }CompressedDataReader;
 
 typedef struct{
-  uint8_t rice_k;
+  uint8_t rice_k_accel;
+  uint8_t rice_k_gyro;
   int block_size;
   int prediction_strategy;
 }Parameters;

@@ -15,6 +15,8 @@
 #include "fix16.h"
 #include "fir_predictive_filter.h"
 
+#include <stdio.h>
+
 #define FIR_BUFFER_MASK (MAX_FIR_LENGTH - 1)
 
 /**
@@ -26,8 +28,12 @@
 int init_fir_filter(int32_t *coeffs, int length, FIRFilterState *state) {
   if (length > MAX_FIR_LENGTH)
     return -1;
-  for (int i = 0; i < length; i++)
+  //printf("filter value: ");
+  for (int i = 0; i < length; i++) {
     state->filter_coefs[i] = coeffs[i];
+    //printf("%4.1f ", fix16_to_float(coeffs[i]));
+  }
+  //printf("\n");
   state->filter_length = length;
   for (int sample=0; sample < MAX_FIR_LENGTH; sample++) {
     state->ring_buffer.past[sample] = fix16_from_int(0);
@@ -89,7 +95,7 @@ int16_t decode_fir_residual(int16_t residual, FIRFilterState *state) {
 int16_t get_cross_fir_residual(int16_t measurement, CrossFIRFilterState *state) {
   fix16_t prediction = 0;
   for (int i=0; i < CROSS_STREAM_CT; i++) {
-    prediction += apply_filter(&state->stream_state[i]);
+    prediction = fix16_add(prediction, apply_filter(&state->stream_state[i]));
   }
   return measurement - fix16_to_int(prediction);
 }
@@ -101,7 +107,7 @@ int16_t get_cross_fir_residual(int16_t measurement, CrossFIRFilterState *state) 
 int16_t decode_cross_fir_residual(int16_t residual, CrossFIRFilterState *state) {
   fix16_t prediction = 0;
   for (int i=0; i < CROSS_STREAM_CT; i++) {
-    prediction += apply_filter(&state->stream_state[i]);
+    prediction = fix16_add(prediction, apply_filter(&state->stream_state[i]));
   }
   return fix16_to_int(prediction) + residual;
 }

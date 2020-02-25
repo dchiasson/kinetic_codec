@@ -10,7 +10,7 @@ import data_tools
 
 fixed_point = True
 
-for m in range(1, 7): # polynomial order
+for m in range(0, 7): # polynomial order
     if fixed_point:
         dir_name = 'fixed_poly_pred/{}_deg_poly_reg'.format(m)
     else:
@@ -20,8 +20,8 @@ for m in range(1, 7): # polynomial order
         os.makedirs(dir_name)
     except OSError:
         pass
-    #for n in list(range(m, 100)) + [2**i for i in range(4, 15)]:
-    for n in range(m, 20):
+    for n in list(range(m, 20)) + [2**i for i in range(5, 10)]:
+    #for n in range(m, 20):
         print("computing m={}, n={}".format(m, n))
         x = np.matrix([[b**a for a in range(m)] for b in range(n)], np.double)
         n_p1 = np.matrix([(n) ** a for a in range(m)], np.double)

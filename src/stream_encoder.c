@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "fir_predictive_filter.h"
+#include "stream_encoder.h"
 #include "data_format.h"
 #include "encode.h"
 
@@ -13,7 +14,12 @@
 #define PREDICTION_DIFF_ENCODING 1
 Parameters params;
 
-void build_stream_fir(int order, int history, ObjectState *object_state) {
+int file_exists(const char *file_name) {
+  if (access(file_name, F_OK) != -1) return 1;
+  else return 0;
+}
+
+int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state) {
   Position *position = &object_state->position;
   Orientation *orientation = &object_state->orientation;
   StreamFir *stream_fir = &object_state->stream_fir;
@@ -52,26 +58,80 @@ void build_stream_fir(int order, int history, ObjectState *object_state) {
       stream_fir->pointers[stream_fir->pointer_count++] = orientation->rot_accel->z;
     }
   }
-  int fd;
-  char buffer[100];
-  ///@TODO(David): Check that this file exists first!!
-  sprintf(buffer, "../data/fixed_poly_pred/%d_deg_poly_reg/%d", order, history);
-  //sprintf(buffer, "../data/natural_spline_pred/condition%d/%d", order, history);
-  //sprintf(buffer, "../machine_learning/cross_fir/test_coefs");
-  fd = open(buffer, O_RDONLY, 0);
-  //strcat(buffer, "\n");
-  //printf(buffer);
-  int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*history, PROT_READ, MAP_SHARED, fd, 0);
-  //int32_t *poly_reg = (int32_t*)mmap(NULL, sizeof(int32_t)*20*6, PROT_READ, MAP_SHARED, fd, 0);
-  for (int i=0; i<18; i++) {
-    init_fir_filter(poly_reg, history, &stream_fir->fir_state[i]);
-    //for (int j=0; j<6; j++) {
-    //  init_fir_filter(&poly_reg[20*j], 20, &stream_fir->cross_fir_state[i].stream_state[j]);
-    //}
+  if (!file_exists(filter_loc)) {
+    fprintf(stderr, "Filter coefficient file not found!\n");
+    return 1;
   }
-  stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
-  //stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
+  int fd;
+  fd = open(filter_loc, O_RDONLY, 0);
+  FILE* fp = fdopen(fd, "r");
+  fseek(fp, 0L, SEEK_END);
+  int coeff_count = ftell(fp) / sizeof(int32_t);
+  fseek(fp, 0L, SEEK_SET);
+  int32_t *filter_coeffs = (int32_t*)mmap(NULL, sizeof(int32_t)*coeff_count, PROT_READ, MAP_SHARED, fd, 0);
+
+  int history;
+  int stream_count = 6;
+  switch (technique) {
+    case TECH__AUTOHOMO:
+    {
+      history = coeff_count;
+      stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
+      for (int i=0; i<stream_count; i++) {
+        init_fir_filter(filter_coeffs, history, &stream_fir->fir_state[i]);
+      }
+      break;
+    }
+    case TECH__AUTOHETERO:
+    {
+      history = coeff_count / stream_count;
+      if (history * stream_count != coeff_count) {
+        fprintf(stderr, "Filter coefficients do not match technique requirement\n");
+        return 1;
+      }
+      stream_fir->filter_type = FILTER_TYPE__AUTO_FIR;
+      for (int i=0; i<stream_count; i++) { // input data stream
+        init_fir_filter(&filter_coeffs[history*i], history, &stream_fir->fir_state[i]);
+      }
+      break;
+    }
+    case TECH__CROSSHOMO:
+    {
+      history = coeff_count / stream_count;
+      if (history * stream_count != coeff_count) {
+        fprintf(stderr, "Filter coefficients do not match technique requirement\n");
+        return 1;
+      }
+      for (int i=0; i<stream_count; i++) { // input data stream
+        for (int j=0; j<stream_count; j++) { // FIR stream index
+          init_fir_filter(&filter_coeffs[history*j], history, &stream_fir->cross_fir_state[i].stream_state[j]);
+        }
+      }
+      stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
+      break;
+    }
+    case TECH__CROSSHETERO:
+    {
+      history = coeff_count / (stream_count * stream_count);
+      if (history * stream_count * stream_count != coeff_count) {
+        fprintf(stderr, "Filter coefficients do not match technique requirement\n");
+        return 1;
+      }
+      for (int i=0; i<stream_count; i++) { // input data stream
+        for (int j=0; j<stream_count; j++) { // FIR stream index
+          init_fir_filter(&filter_coeffs[history*j+history*stream_count*i], history, &stream_fir->cross_fir_state[i].stream_state[j]);
+        }
+      }
+      stream_fir->filter_type = FILTER_TYPE__CROSS_FIR;
+      break;
+    }
+    default:
+      fprintf(stderr, "Unexpected technique: %d\n", technique);
+      return 1;
+      break;
+  }
   close(fd);
+  return 0;
 }
 
 
@@ -88,14 +148,15 @@ int encode_data(int max_output_size, ObjectState *input_state, CompressedDataWri
         int32_t res = get_fir_residual(
             input_state->stream_fir.pointers[stream][sample],
             &input_state->stream_fir.fir_state[stream]);
-        rice_encode(res, data_writer, params);
+        //printf("samp:%d st:%d res:%d\n", sample, stream, res);
+        rice_encode(res, data_writer, (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro); // Hack to allow different K values
       }
     } else if (input_state->stream_fir.filter_type == FILTER_TYPE__CROSS_FIR) {
       for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
         int32_t res = get_cross_fir_residual(
             input_state->stream_fir.pointers[stream][sample],
             &input_state->stream_fir.cross_fir_state[stream]);
-        rice_encode(res, data_writer, params);
+        rice_encode(res, data_writer, (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro); // Hack to allow different K values
       }
       for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
         update_cross_fir_filters(
@@ -115,13 +176,16 @@ int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, ui
   for (uint32_t sample=0; sample < sample_count; sample++) {
     if (output_state->stream_fir.filter_type == FILTER_TYPE__AUTO_FIR) {
       for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+        uint8_t rice_k = (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro; // Hack to allow different K values
         output_state->stream_fir.pointers[stream][sample] = 
-          decode_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.fir_state[stream]);
+          decode_fir_residual(rice_decode(data_reader, rice_k), &output_state->stream_fir.fir_state[stream]);
+
       }
     } else if (output_state->stream_fir.filter_type == FILTER_TYPE__CROSS_FIR) {
       for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+        uint8_t rice_k = (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro; // Hack to allow different K values
         output_state->stream_fir.pointers[stream][sample] =
-          decode_cross_fir_residual(rice_decode(data_reader, params), &output_state->stream_fir.cross_fir_state[stream]);
+          decode_cross_fir_residual(rice_decode(data_reader, rice_k), &output_state->stream_fir.cross_fir_state[stream]);
       }
       for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
         update_cross_fir_filters(
@@ -160,6 +224,10 @@ int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample
   Vect *accel = input_state->position.accel;
   strcpy(file_name, data_dir);
   strcat(file_name, "acc_x");
+  if (!file_exists(file_name)) {
+    fprintf(stderr, "Sensor data files not found!\n");
+    return 1;
+  }
   fd = open(file_name, O_RDONLY, 0);
   FILE* fp = fdopen(fd, "r");
   fseek(fp, 0L, SEEK_END); // assume all streams are same length
@@ -233,82 +301,62 @@ int init_empty_object_state(ObjectState *object_state, int sample_count) {
   return 0;
 }
 
-int main(int argc, char** argv) {
+int compress_main(char *data_folder, char *filter_loc, int technique, int rice_order) {
   ObjectState input_state;
   int sample_count;
+  int ret=0;
 
-  char *data_loc;
-  if (argc > 1) {
-    data_loc = argv[1];
-  } else {
-    data_loc = "../data/raw_data/";
+  ret |= load_sensor_data(data_folder, &input_state, &sample_count);
+  if (ret) return ret;
+
+  params.rice_k_accel = rice_order;
+  params.rice_k_gyro = rice_order-1;
+  params.block_size = BLOCK_SIZE_MAX;
+  params.prediction_strategy = technique;
+
+  ret |= build_stream_fir(filter_loc, technique, &input_state);
+  if (ret) return ret;
+
+  ObjectState output_state = {};
+  init_empty_object_state(&output_state, sample_count);
+  ret |= build_stream_fir(filter_loc, technique, &output_state);
+  if (ret) return ret;
+
+  int max_output_size = sample_count * 6 * 2 * 200;
+  uint8_t *data_out = calloc(1, max_output_size); // worse than .01 compression ratio will seg fault
+  if (!data_out) {
+    printf("calloc failed!\n");
+    return 1;
+  }
+  CompressedDataWriter data_writer = {};
+  data_writer.data_out = data_out;
+
+
+  ret |= encode_data(max_output_size, &input_state, &data_writer);
+  if (ret) return ret;
+  uint32_t block_len = data_writer.bit_pointer >> 3;
+
+
+  // Decode the data we just compressed to check for errors
+  CompressedDataReader data_reader = {};
+  data_reader.data_in = data_out;
+
+  decode_data(&data_reader, &output_state, sample_count);
+  if (check_errors(&input_state, &output_state)) {
+    return 1;
   }
 
-  load_sensor_data(data_loc, &input_state, &sample_count);
+  double cr =  ((double)(sample_count*2*6)/block_len);
+  printf("tech %d, k: %d, fin_size: %d, CR: %f, data: %s, filter: %s\n", technique, rice_order, block_len, cr, data_folder, filter_loc);
 
-  for (int order=6; order<=6; order++) {
-    for (int history=order; history<20; history++) {
-      int best_k = 0;
-      double best_cr = 0;
-      double best_block_len = 0;
-      for (int k=4; k<14; k++) {
-        params.rice_k = k;
-        params.block_size = BLOCK_SIZE_MAX;
-        params.prediction_strategy = PREDICTION_DIFF_ENCODING;
-
-        build_stream_fir(order, history, &input_state);
-
-        ObjectState output_state = {};
-        init_empty_object_state(&output_state, sample_count);
-        build_stream_fir(order, history, &output_state);
-
-
-        // @TODO(David): how do I know this is big enough?!
-        int max_output_size = sample_count * 6 * 2 * 200;
-        uint8_t *data_out = calloc(1, max_output_size); // worse than .01 compression ratio will seg fault
-        if (!data_out) {
-          printf("calloc failed!\n");
-          return 1;
-        }
-        CompressedDataWriter data_writer = {};
-        data_writer.data_out = data_out;
-
-
-        encode_data(max_output_size, &input_state, &data_writer);
-        uint32_t block_len = data_writer.bit_pointer >> 3;
-
-
-        // Decode the data we just compressed to check for errors
-        CompressedDataReader data_reader = {};
-        data_reader.data_in = data_out;
-
-        decode_data(&data_reader, &output_state, sample_count);
-        if (check_errors(&input_state, &output_state)) {
-          continue;
-        }
-
-        double cr =  ((double)(sample_count*2*6)/block_len);
-        if (cr > best_cr) {
-          best_k = k;
-          best_cr = cr;
-          best_block_len = block_len;
-        } else {
-          k+=10;
-        }
-        if (data_out) {
-          free(data_out);
-          free(output_state.position.accel->x);
-          free(output_state.position.accel->y);
-          free(output_state.position.accel->z);
-          free(output_state.orientation.rot_vel->x);
-          free(output_state.orientation.rot_vel->y);
-          free(output_state.orientation.rot_vel->z);
-        }
-      } // k
-      printf("order: %d, history: %d, k: %d, CR: %f fin_size: %f\n", order, history, best_k, best_cr, best_block_len);
-      //if (order == 0) history += 100;
-    } // history
-  } // order
-
+  if (data_out) {
+    free(data_out);
+    free(output_state.position.accel->x);
+    free(output_state.position.accel->y);
+    free(output_state.position.accel->z);
+    free(output_state.orientation.rot_vel->x);
+    free(output_state.orientation.rot_vel->y);
+    free(output_state.orientation.rot_vel->z);
+  }
   return 0;
-} // main
+}
