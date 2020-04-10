@@ -1,3 +1,14 @@
+https://www.mdpi.com/journal/sensors/special_issues/sensors_tech_human_move
+
+Guest Editors: Dr. Winson Lee
+
+               Dr. Emre Sariyildiz
+
+Submission Deadline: 31 August 2020
+
+Versioning explained:
+Before every local edit, increment minor number
+Before any co-author review, increment major number, and set minor to zero
 
 
 Many developing sensor applications will soon utilize the real-time processing of kinematic data signals. These include virtual reality, autonimous driving, IoT, healthcare, wearable electronics, and among others. These applications have been enabled by the recent explosion of cheap intertial based sensors which can measure rotational velocity and linear acceleration. From an information network perspective, kinematic data represents an entirely new field of multimedia data which is starkly unexplored compared to the more mature cousins of text, audio, and video. In order to enable these modern applications, technniques for processing and interperting kinematic data must be developed.

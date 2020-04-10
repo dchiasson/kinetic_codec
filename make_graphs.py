@@ -6,43 +6,51 @@ label = [
 "CSV",
 "zip CSV",
 "Binary",
-"",
 #"Rice binary",
 #"FLAC binary",
 "5th deg. poly.",
 "4th deg. poly.",
 "3rd deg. poly.",
 "2nd deg. poly.",
-"Linear",
-"Difference",
+"1st deg. poly.",
+"Delta",
+"Linear Prediction",
+"Cross-stream Linear",
 ]
 
 data = [
 1,
 6.39430101906924,
 8,
-0,
 15.7435375654354,
 16.6506891059521,
 17.0894663675541,
 17.0607944899643,
 17.7479776359381,
 19.0163900005226,
+19.1859870218086,
+16.1825627149527
 ]
 
 fig = plt.figure(1)
-label_size = 10
+label_size = 13
 index = np.arange(len(label))
 plt.bar(index[:3], data[:3], color='g')
-plt.bar(index[4:], data[4:], color='b')
+plt.bar(index[3:], data[3:], color='b')
 plt.xlabel('Encoding', fontsize=label_size*1.2)
 plt.ylabel('Compression Ratio', fontsize=label_size*1.2)
 plt.xticks(index, label, fontsize=label_size, rotation=30, ha='right')
-plt.title('Compression Ratios of Various Compression Techniques')
-plt.axvline(x=3, linewidth=1, color='k', ls='--')
-plt.ylim(0,20)
-fig.axes[0].text(1,10, 'Traditional\nMethods', ha='center', fontsize=1.5*label_size)
-fig.subplots_adjust(bottom=.2)
+plt.yticks(fontsize=label_size)
+plt.title('IMU Data Compression Using Various Techniques', fontsize=label_size*1.2, pad=20)
+plt.axvline(x=2.5, linewidth=1, color='k', ls='--')
+plt.ylim(0,23)
+plt.xlim(-.5,10.5)
+fig.axes[0].text(1,18, 'Traditional\nMethods', ha='center', fontsize=label_size)
+fig.axes[0].text(6.5,20, 'Proposed Methods', ha='center', fontsize=label_size)
+fig.subplots_adjust(bottom=.4)
+
+plt.show()
+"""
 
 plt.figure(2)
 
@@ -116,3 +124,4 @@ plt.xticks(index, label, fontsize=label_size, rotation=90)
 plt.title('Compression Ratios Compared across type')
 
 plt.show()
+"""

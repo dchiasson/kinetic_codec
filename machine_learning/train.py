@@ -43,8 +43,8 @@ def compute_zeros(b_vec):
     return zeros, b_vec[0]/poly[0]
 
 
-HISTORY = 2
-def build_features(file_name, axis):
+HISTORY = 3
+def build_features(file_name, axis, is_cross=False):
     #file_name='HuGaDB_v1_walking_14_02.txt'
     #ACCEL_FIX = 2.0/32765
     #GYRO_FIX = 2000/32768
@@ -58,9 +58,16 @@ def build_features(file_name, axis):
     features, labels = [], []
 
     #for start in range(0, 36, 6):
-    for start in [axis]:
-        cols = range(start, start+6)
-        cols = range(6)
+    col_set = [axis]
+    #if axis < 3:
+    #    col_set = [0,1,2]
+    #else:
+    #    col_set = [3,4,5]
+    for start in col_set:
+        if is_cross:
+            cols = range(6)
+        else:
+            cols = [start]
         for time in range(HISTORY, data_length):
             example = []
             for col in cols:
@@ -70,9 +77,10 @@ def build_features(file_name, axis):
     return np.asarray(features), np.asarray(labels)
 
 def test():
-    fil_coef = np.zeros((6,6,5))
+    fil_coef = np.zeros((6,6,1))
     for thing in range(6):
-        fil_coef[thing][thing][4] = 1
+        fil_coef[thing][thing][0] = 1
+    fil_coef[0][0][0]=.9182
     dir_name = 'cross_fir'
     data_tools.save_array(fil_coef, os.path.join(dir_name, 'test_coefs'))
     print(fil_coef)
@@ -94,15 +102,19 @@ def data_train():
     #        y = np.concatenate((y, ynew))
     #    else:
     #        X, y = build_features(data_path)
-    data_file = '/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/all_3.csv'
+    data_file = '/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed/training/all.csv'
     all_coeffs = []
+    #for stream in [0, 3]:
     for stream in range(6):
-        X, y = build_features(data_file, stream)
+        X, y = build_features(data_file, stream, is_cross=True)
+        print("features built for stream {}".format(stream))
 
         #reg = LinearRegression().fit(X,y)
-        reg = Lasso(alpha=.1, max_iter=2000).fit(X,y)
+        reg = Lasso(alpha=.1, max_iter=200000).fit(X,y)
         reg.coef_[np.abs(reg.coef_) < (1.0/16)] = 0
         print(reg.coef_)
+        #all_coeffs.append(reg.coef_)
+        #all_coeffs.append(reg.coef_)
         all_coeffs.append(reg.coef_)
     all_coeffs = np.asarray(all_coeffs)
     #print(reg.score(X,y))
