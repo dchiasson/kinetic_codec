@@ -28,6 +28,7 @@ typedef struct{
   int pointer_count;
   FIRFilterState fir_state[18];
   CrossFIRFilterState cross_fir_state[18];
+  int history;
   int filter_type;
 }StreamFir;
 

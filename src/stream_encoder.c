@@ -20,6 +20,9 @@ int file_exists(const char *file_name) {
 }
 
 int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state) {
+
+  // 1) Connect Sensor Data Streams into our FIR object
+
   Position *position = &object_state->position;
   Orientation *orientation = &object_state->orientation;
   StreamFir *stream_fir = &object_state->stream_fir;
@@ -62,6 +65,9 @@ int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state)
     fprintf(stderr, "Filter coefficient file not found!\n");
     return 1;
   }
+
+  // 2) Load filter coeficients from file
+
   int fd;
   fd = open(filter_loc, O_RDONLY, 0);
   FILE* fp = fdopen(fd, "r");
@@ -131,14 +137,32 @@ int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state)
       break;
   }
   close(fd);
+
+  stream_fir->history = history;
+
+  // 3) Warmup Filters with initial values 
+
+
   return 0;
 }
 
 
 /// @TODO(David): support block sizes
 int encode_data(int max_output_size, ObjectState *input_state, CompressedDataWriter *data_writer) {
+
+  // Store inital values raw
+  for (int stream=0; stream < input_state->stream_fir.pointer_count; stream++) {
+    for (int i=0; i < input_state->stream_fir.history; i++) {
+      int16_t warmup = input_state->stream_fir.pointers[stream][i];
+      // We can ignore the resudual since we are writing the raw value.
+      // We just want to warmup the filter
+      get_fir_residual(warmup, &input_state->stream_fir.fir_state[stream]);
+      put_word(warmup, data_writer);
+    }
+  }
+
   uint32_t sample_count = input_state->position.accel->data_len;
-  for (uint32_t sample=0; sample < sample_count; sample++) {
+  for (uint32_t sample = input_state->stream_fir.history; sample < sample_count; sample++) {
     if ((data_writer->bit_pointer >> 3) > 0.8 * max_output_size) {
        printf("Output buffer running out of space\n");
        return 1;
@@ -175,7 +199,19 @@ int encode_data(int max_output_size, ObjectState *input_state, CompressedDataWri
 /// @TODO(David): if we are decoding blocks, we need to make sure to reset FIR history to recover
 // from dropped packets
 int decode_data(CompressedDataReader *data_reader, ObjectState *output_state, uint32_t sample_count) {
-  for (uint32_t sample=0; sample < sample_count; sample++) {
+
+  // Read inital values raw
+  for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
+    for (int i=0; i < output_state->stream_fir.history; i++) {
+      int16_t warmup = get_word(data_reader);
+      output_state->stream_fir.pointers[stream][i] = warmup;
+      // We can ignore the resudual since we are writing the raw value.
+      // We just want to warmup the filter
+      get_fir_residual(warmup, &output_state->stream_fir.fir_state[stream]);
+    }
+  }
+
+  for (uint32_t sample = output_state->stream_fir.history; sample < sample_count; sample++) {
     if (output_state->stream_fir.filter_type == FILTER_TYPE__AUTO_FIR) {
       for (int stream=0; stream < output_state->stream_fir.pointer_count; stream++) {
         uint8_t rice_k = (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro; // Hack to allow different K values
