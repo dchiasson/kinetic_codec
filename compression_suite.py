@@ -3,6 +3,42 @@
 import os
 import subprocess
 
+def get_file_list(data_type):
+    SENS = ['acc', 'gyro']
+    LOCS = ['rf','rs','rt','lf','ls','lt']
+    ACTS = ['bicycling','running','sitting','standing','walking']
+    DIMS = ['x','y','z']
+    SUBJ = range(1, 18+1)
+
+    folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed/files/"
+    all_folders = [os.path.join(folder_loc, f) for f in os.listdir(folder_loc)]
+    all_folders = list(filter(lambda x: x.split('.')[-1] == 'txt', all_folders))
+    file_list = []
+
+    if data_type == "all":
+        for folder in all_folders:
+            for loc in LOCS:
+                file_list.append(os.path.join(folder, loc))
+                #for data in os.listdir(os.path.join(folder, loc)):
+                #    file_list.append(os.path.join(folder, loc, data))
+    elif data_type in SENS:
+        pass
+    elif data_type in LOCS:
+        pass
+    elif data_type in ACTS:
+        pass
+    elif data_type in DIMS:
+        pass
+    elif data_type in SUBJ:
+        pass
+    else:
+        print("Error: unknown data_type: {}".format(data_type))
+
+    if not all([os.path.isfile(f) for f in file_list]):
+        print("Error: non-existent files in list")
+
+    return file_list
+
 ACCEL_FIX=9.80665*2.0/32768
 GYRO_FIX=2000/32768
 
@@ -10,31 +46,33 @@ def extract_size(output_text):
     return int(output_text.split(b',')[2].split(b' ')[-1])
 
 def run_iteration(technique, k, filter_loc, data_loc, verbose=False):
-    command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-    if (result.returncode != 0):
-        print(result.args)
-        print(result.stdout)
-        return 1e99
-        raise Exception
-    if verbose: 
-        print(result.stdout.decode("utf-8"))
-    size = extract_size(result.stdout)
-    #print("{}".format(extract_size(result.stdout)))
+    size = 0
+    for data in data_loc: #NOOOOOO!! this should happen outside of K optimization!
+        command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        if (result.returncode != 0):
+            print(result.args)
+            print(result.stdout)
+            return 1e99
+            raise Exception
+        if verbose: 
+            print(result.stdout.decode("utf-8"))
+        size += extract_size(result.stdout)
+        #print("{}".format(extract_size(result.stdout)))
     return size
 
 def run_best_k(technique, filter_loc, data_loc, starting_k=12, verbose=False):
-    min_k = 4
-    max_k = 14
-    best_size = 1e99
-    best_k = -1
-    for k in range(min_k, max_k+1):
-        size = run_iteration(technique, k, filter_loc, data_loc, verbose)
-        if size < best_size:
-            best_size = size
-            best_k = k
-    print("tech:{} == {} == {}".format(technique, filter_loc, data_loc))
-    print("{}, {}".format(best_size, best_k))
+    #    min_k = 4
+    #    max_k = 14
+    #    best_size = 1e99
+    #    best_k = -1
+    #    for k in range(min_k, max_k+1):
+    #        size = run_iteration(technique, k, filter_loc, data_loc, verbose)
+    #        if size < best_size:
+    #            best_size = size
+    #            best_k = k
+    #    print("tech:{} == {} == {}".format(technique, filter_loc, data_loc))
+    #    print("{}, {}".format(best_size, best_k))
 
 
     best_k = starting_k

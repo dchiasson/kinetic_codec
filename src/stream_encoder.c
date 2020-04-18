@@ -261,7 +261,7 @@ int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample
   input_state->position.accel = malloc(sizeof(Vect));
   Vect *accel = input_state->position.accel;
   strcpy(file_name, data_dir);
-  strcat(file_name, "acc_x");
+  strcat(file_name, "/acc_x");
   if (!file_exists(file_name)) {
     fprintf(stderr, "Sensor data files not found!\n");
     return 1;
@@ -277,12 +277,12 @@ int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample
   accel->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   strcpy(file_name, data_dir);
-  strcat(file_name, "acc_y");
+  strcat(file_name, "/acc_y");
   fd = open(file_name, O_RDONLY, 0);
   accel->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   strcpy(file_name, data_dir);
-  strcat(file_name, "acc_z");
+  strcat(file_name, "/acc_z");
   fd = open(file_name, O_RDONLY, 0);
   accel->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
@@ -291,17 +291,17 @@ int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample
   input_state->orientation.rot_vel = malloc(sizeof(Vect));
   Vect *gyro = input_state->orientation.rot_vel;
   strcpy(file_name, data_dir);
-  strcat(file_name, "gyro_x");
+  strcat(file_name, "/gyro_x");
   fd = open(file_name, O_RDONLY, 0);
   gyro->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   strcpy(file_name, data_dir);
-  strcat(file_name, "gyro_y");
+  strcat(file_name, "/gyro_y");
   fd = open(file_name, O_RDONLY, 0);
   gyro->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
   strcpy(file_name, data_dir);
-  strcat(file_name, "gyro_z");
+  strcat(file_name, "/gyro_z");
   fd = open(file_name, O_RDONLY, 0);
   gyro->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
