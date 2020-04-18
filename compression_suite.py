@@ -9,15 +9,71 @@ GYRO_FIX=2000/32768
 def extract_size(output_text):
     return int(output_text.split(b',')[2].split(b' ')[-1])
 
-def run_iteration(technique, k, filter_loc, data_loc):
+def run_iteration(technique, k, filter_loc, data_loc, verbose=False):
     command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     if (result.returncode != 0):
         print(result.args)
         print(result.stdout)
+        return 1e99
         raise Exception
-    print(result.stdout.decode("utf-8"))
-    print("{}".format(extract_size(result.stdout)))
+    if verbose: 
+        print(result.stdout.decode("utf-8"))
+    size = extract_size(result.stdout)
+    #print("{}".format(extract_size(result.stdout)))
+    return size
+
+def run_best_k(technique, filter_loc, data_loc, starting_k=12, verbose=False):
+    min_k = 4
+    max_k = 14
+    best_size = 1e99
+    best_k = -1
+    for k in range(min_k, max_k+1):
+        size = run_iteration(technique, k, filter_loc, data_loc, verbose)
+        if size < best_size:
+            best_size = size
+            best_k = k
+    print("tech:{} == {} == {}".format(technique, filter_loc, data_loc))
+    print("{}, {}".format(best_size, best_k))
+
+
+    best_k = starting_k
+    current_k = starting_k
+    best_size = run_iteration(technique, current_k, filter_loc, data_loc, verbose)
+    iterations = 0
+
+    #increasing K
+    while True:
+        iterations += 1
+        current_k += 1
+        size = run_iteration(technique, current_k, filter_loc, data_loc, verbose)
+        if size <= best_size:
+            best_size = size
+            best_k = current_k
+        else:
+            current_k -= 1
+            break
+        if iterations > 12:
+            print("ERROR: k search failed during increase")
+            return 1e99, -1
+
+    iterations = 0
+    #decreasing K
+    while True:
+        iterations += 1
+        current_k -= 1
+        size = run_iteration(technique, current_k, filter_loc, data_loc, verbose)
+        if size < best_size:
+            best_size = size
+            best_k = current_k
+        else:
+            break
+        if iterations > 12:
+            print("ERROR: k search failed during decrease")
+            return 1e99, -1
+
+    return best_size, best_k
+        
 
 def print_csv_size(data_loc):
     print(os.path.getsize(os.path.join(data_loc, 'all.csv')))
@@ -40,23 +96,46 @@ def print_zip_size(data_loc):
     print(os.path.getsize(zip_csv))
 
 def run_all_on_data(data_loc):
+    #####################
+    # Reference formats #
+    #####################
     print_csv_size(data_loc)
     print_zip_size(data_loc)
     print_binary_size(data_loc)
-    return
+
+    technique = "auto-homo"
+    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    run_best_k(technique,  filter_loc.format(0,0), data_loc)
+
+    ##########
+    # Spline #
+    ##########
+    technique = "auto-homo"
+    filter_loc = "~/Documents/David/research/kinetic_codec/data/natural_spline_pred/condition0/2"
+    run_best_k(technique, filter_loc, data_loc)
 
     ###############################
     # Polynomial Regression Suite #
     ###############################
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
-    run_iteration(technique, 7, filter_loc.format(6,19), data_loc)
-    run_iteration(technique, 6, filter_loc.format(5,19), data_loc)
-    run_iteration(technique, 6, filter_loc.format(4,19), data_loc)
-    run_iteration(technique, 5, filter_loc.format(3,13), data_loc)
-    run_iteration(technique, 5, filter_loc.format(2,8), data_loc)
-    run_iteration(technique, 5, filter_loc.format(1,1), data_loc)
-    run_iteration(technique, 12, filter_loc.format(0,0), data_loc)
+    run_best_k(technique, filter_loc.format(6,19), data_loc)
+    run_best_k(technique, filter_loc.format(5,19), data_loc)
+    run_best_k(technique, filter_loc.format(4,19), data_loc)
+    run_best_k(technique, filter_loc.format(3,13), data_loc)
+    run_best_k(technique, filter_loc.format(2,8), data_loc)
+    run_best_k(technique, filter_loc.format(1,1), data_loc)
+
+    technique = "auto-hetero"
+    #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_{}"
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_2_2"
+    #run_best_k(technique, filter_loc.format(2), data_loc)
+    run_best_k(technique, filter_loc, data_loc)
+
+
+    technique = 'cross-hetero'
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir_old/cross_hetero_{}"
+    run_best_k(technique, filter_loc.format(3), data_loc)
 
 
 def cross_homo():
@@ -115,9 +194,50 @@ def poly_reg():
         #        print("{} for k= {}".format(fil, k))
         #        run_iteration(technique, k, filter_loc.format(*fil), data_loc)
 
+def test_2():
+
+    data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed/activity/standing/"
+    technique = 'auto-hetero'
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/cvx_solver_1"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+
+    technique = "cross-hetero"
+    for i in range(1,8):
+        filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_2_{}".format(i)
+        run_iteration(technique, 5, filter_loc, data_loc, True)
+
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_1"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+    
+    technique = "auto-homo"
+    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    run_iteration(technique, 5, filter_loc.format(1,1), data_loc, True)
+
+    technique = "cross-hetero"
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_0"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+
+    technique = 'auto-hetero'
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_2"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/newbuilt_auto_hetero_0"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+
+    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/newbuilt_auto_hetero_1"
+    run_iteration(technique, 5, filter_loc, data_loc, True)
+
 if __name__ == '__main__':
-    data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/activity/standing"
+    #test_2()
+    #data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/"
+    data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed.new/"
     run_all_on_data(data_loc)
+
     #poly_reg()
     #cross_homo_total()
     #test_data()
+    
+    #data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/"
+    #technique = "auto-hetero"
+    #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_{}"
+    #run_iteration(technique, 5, filter_loc.format(2), data_loc)

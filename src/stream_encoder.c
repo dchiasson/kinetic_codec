@@ -148,7 +148,9 @@ int encode_data(int max_output_size, ObjectState *input_state, CompressedDataWri
         int32_t res = get_fir_residual(
             input_state->stream_fir.pointers[stream][sample],
             &input_state->stream_fir.fir_state[stream]);
-        //printf("samp:%d st:%d res:%d\n", sample, stream, res);
+        if (stream == 0) {
+          //printf("samp:%d st:%d val:%d res:%d\n", sample, stream, input_state->stream_fir.pointers[stream][sample],  res);
+        }
         rice_encode(res, data_writer, (stream % 6 < 3) ? params.rice_k_accel : params.rice_k_gyro); // Hack to allow different K values
       }
     } else if (input_state->stream_fir.filter_type == FILTER_TYPE__CROSS_FIR) {
