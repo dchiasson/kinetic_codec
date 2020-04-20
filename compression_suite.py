@@ -3,6 +3,8 @@
 import os
 import subprocess
 
+from machine_learning import optimal_fir
+
 def get_file_list(data_type):
     SENS = ['acc', 'gyro']
     LOCS = ['rf','rs','rt','lf','ls','lt']
@@ -10,7 +12,9 @@ def get_file_list(data_type):
     DIMS = ['x','y','z']
     SUBJ = range(1, 18+1)
 
-    folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed/files/"
+    folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/files/"
+    csv_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/"
+    csv_folder = None
     all_folders = [os.path.join(folder_loc, f) for f in os.listdir(folder_loc)]
     all_folders = list(filter(lambda x: x.split('.')[-1] == 'txt', all_folders))
     file_list = []
@@ -19,25 +23,36 @@ def get_file_list(data_type):
         for folder in all_folders:
             for loc in LOCS:
                 file_list.append(os.path.join(folder, loc))
-                #for data in os.listdir(os.path.join(folder, loc)):
-                #    file_list.append(os.path.join(folder, loc, data))
+        csv_folder = csv_loc
     elif data_type in SENS:
         pass
     elif data_type in LOCS:
-        pass
+        for folder in all_folders:
+            file_list.append(os.path.join(folder, data_type))
+        csv_folder = os.path.join(csv_loc, 'segment', data_type)
     elif data_type in ACTS:
-        pass
+        for folder in all_folders:
+            if (folder.split('/')[-1].find(data_type) != -1):
+                for loc in LOCS:
+                    file_list.append(os.path.join(folder, loc))
+        csv_folder = os.path.join(csv_loc, 'activity', data_type)
     elif data_type in DIMS:
         pass
     elif data_type in SUBJ:
-        pass
+        for folder in all_folders:
+            if (int(folder.split('/')[-1].split('_')[-2]) == data_type):
+                for loc in LOCS:
+                    file_list.append(os.path.join(folder, loc))
+        csv_folder = os.path.join(csv_loc, 'subject', str(data_type))
     else:
         print("Error: unknown data_type: {}".format(data_type))
 
-    if not all([os.path.isfile(f) for f in file_list]):
+    if not all([os.path.isdir(f) for f in file_list]):
         print("Error: non-existent files in list")
+    if csv_folder is None:
+        print("Error: could not find csv location for {}".format(data_type))
 
-    return file_list
+    return file_list, csv_folder
 
 ACCEL_FIX=9.80665*2.0/32768
 GYRO_FIX=2000/32768
@@ -46,35 +61,20 @@ def extract_size(output_text):
     return int(output_text.split(b',')[2].split(b' ')[-1])
 
 def run_iteration(technique, k, filter_loc, data_loc, verbose=False):
-    size = 0
-    for data in data_loc: #NOOOOOO!! this should happen outside of K optimization!
-        command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data)
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-        if (result.returncode != 0):
-            print(result.args)
-            print(result.stdout)
-            return 1e99
-            raise Exception
-        if verbose: 
-            print(result.stdout.decode("utf-8"))
-        size += extract_size(result.stdout)
-        #print("{}".format(extract_size(result.stdout)))
+    command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+    if (result.returncode != 0):
+        print(result.args)
+        print(result.stdout)
+        return 1e99
+        raise Exception
+    if verbose: 
+        print(result.stdout.decode("utf-8"))
+    size = extract_size(result.stdout)
+    #print("{}".format(extract_size(result.stdout)))
     return size
 
 def run_best_k(technique, filter_loc, data_loc, starting_k=12, verbose=False):
-    #    min_k = 4
-    #    max_k = 14
-    #    best_size = 1e99
-    #    best_k = -1
-    #    for k in range(min_k, max_k+1):
-    #        size = run_iteration(technique, k, filter_loc, data_loc, verbose)
-    #        if size < best_size:
-    #            best_size = size
-    #            best_k = k
-    #    print("tech:{} == {} == {}".format(technique, filter_loc, data_loc))
-    #    print("{}, {}".format(best_size, best_k))
-
-
     best_k = starting_k
     current_k = starting_k
     best_size = run_iteration(technique, current_k, filter_loc, data_loc, verbose)
@@ -111,7 +111,16 @@ def run_best_k(technique, filter_loc, data_loc, starting_k=12, verbose=False):
             return 1e99, -1
 
     return best_size, best_k
-        
+
+def process_data_list(technique, filter_loc, data_list, verbose=False):
+    total_size = 0
+    for data in data_list:
+        best_size, best_k = run_best_k(technique, filter_loc, data, 10, verbose)
+        if verbose:
+          print(best_size, best_k)
+        total_size += best_size
+    print(total_size)
+    return total_size
 
 def print_csv_size(data_loc):
     print(os.path.getsize(os.path.join(data_loc, 'all.csv')))
@@ -133,47 +142,66 @@ def print_zip_size(data_loc):
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     print(os.path.getsize(zip_csv))
 
-def run_all_on_data(data_loc):
+def get_flac_compressed_size(data_loc):
+    file_list = ["acc_x", "acc_y", "acc_z", "gyro_x", "gyro_y", "gyro_z"]
+    total_size = 0
+    for f in file_list:
+        file_path = os.path.join(data_loc, f)
+        #command = "flac --endian=little --channels=1 --bps=16 --sample-rate=60000 --sign=signed {} -f -r 0,0 -l 0 -b 16348".format(file_path)
+        command = "flac --endian=little --channels=1 --bps=16 --sample-rate=60000 --sign=signed {} -f -r 0,0 -l 0".format(file_path)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        total_size += os.path.getsize(file_path + '.flac')
+    print(total_size)
+    return total_size
+
+def run_all_on_data(data_type):
+
+    data_list, csv_folder = get_file_list(data_type)
+    """
+
     #####################
     # Reference formats #
     #####################
-    print_csv_size(data_loc)
-    print_zip_size(data_loc)
-    print_binary_size(data_loc)
+    print_csv_size(csv_folder)
+    print_zip_size(csv_folder)
+    print_binary_size(csv_folder)
 
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
-    run_best_k(technique,  filter_loc.format(0,0), data_loc)
+    process_data_list(technique,  filter_loc.format(0,0), data_list)
 
     ##########
     # Spline #
     ##########
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/natural_spline_pred/condition0/2"
-    run_best_k(technique, filter_loc, data_loc)
+    process_data_list(technique, filter_loc, data_list)
 
     ###############################
     # Polynomial Regression Suite #
     ###############################
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
-    run_best_k(technique, filter_loc.format(6,19), data_loc)
-    run_best_k(technique, filter_loc.format(5,19), data_loc)
-    run_best_k(technique, filter_loc.format(4,19), data_loc)
-    run_best_k(technique, filter_loc.format(3,13), data_loc)
-    run_best_k(technique, filter_loc.format(2,8), data_loc)
-    run_best_k(technique, filter_loc.format(1,1), data_loc)
+    process_data_list(technique, filter_loc.format(6,19), data_list)
+    process_data_list(technique, filter_loc.format(5,19), data_list)
+    process_data_list(technique, filter_loc.format(4,19), data_list)
+    process_data_list(technique, filter_loc.format(3,13), data_list)
+    process_data_list(technique, filter_loc.format(2,8), data_list)
+    process_data_list(technique, filter_loc.format(1,1), data_list)
 
+    filter_loc = optimal_fir.data_train(data_list, 3, False)
     technique = "auto-hetero"
     #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_{}"
-    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_2_2"
-    #run_best_k(technique, filter_loc.format(2), data_loc)
-    run_best_k(technique, filter_loc, data_loc)
+    #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_2_2"
+    #process_data_list(technique, filter_loc.format(2), data_list)
+    process_data_list(technique, filter_loc, data_list)
 
+    """
 
+    filter_loc = optimal_fir.data_train(data_list, 3, True)
     technique = 'cross-hetero'
-    filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir_old/cross_hetero_{}"
-    run_best_k(technique, filter_loc.format(3), data_loc)
+    #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir_old/cross_hetero_{}"
+    process_data_list(technique, filter_loc, data_list)
 
 
 def cross_homo():

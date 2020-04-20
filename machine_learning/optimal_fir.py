@@ -45,8 +45,7 @@ def compute_zeros(b_vec):
 
 
 FILES = [ACC_X, ACC_Y, ACC_Z, GYRO_X, GYRO_Y, GYRO_Z] = ['acc_x','acc_y','acc_z','gyro_x','gyro_y','gyro_z']
-HISTORY = 3
-def build_features(dir_name, axis, is_cross=False):
+def build_features(dir_name, axis, history, is_cross=False):
 
     data_mat = []
     for data_axis in FILES:
@@ -65,10 +64,10 @@ def build_features(dir_name, axis, is_cross=False):
             cols = range(6)
         else:
             cols = [start]
-        for time in range(HISTORY, data_length):
+        for time in range(history, data_length):
             example = []
             for col in cols:
-                example.extend(data_mat[col][time-HISTORY:time])
+                example.extend(data_mat[col][time-history:time])
             features.append(example)
             labels.append(data_mat[start][time])
     return np.asarray(features), np.asarray(labels)
@@ -84,19 +83,31 @@ def test():
     data_tools.save_array(fil_coef, os.path.join(dir_name, 'newbuilt_auto_hetero_0'))
     print(fil_coef)
 
-def data_train():
-    data_dir = '/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed/training/'
+def data_train(folder_list, history=3, is_cross=False, verbose=False):
     all_coeffs = []
     #for stream in [0, 3]:
     for stream in range(6):
-        X, y = build_features(data_dir, stream, is_cross=False)
+        X, y = None, None
+        for data_dir in folder_list:
+            Xi, yi = build_features(data_dir, stream, history, is_cross)
+            if X is None:
+                X = Xi
+                y = yi
+            else:
+                X = np.concatenate((X,Xi))
+                y = np.concatenate((y,yi))
+            #print("features extracted from {} stream {}".format(data_dir, stream))
         K = len(y)
-        print("features built for stream {}".format(stream))
+        if verbose:
+            print("features built for stream {}".format(stream))
         #X = np.log(X)
         #y = np.log(y)
         #print(X)
         #print(y)
-        b = cp.Variable(3)
+        if is_cross:
+            b = cp.Variable(6 * history)
+        else:
+            b = cp.Variable(history)
         #e = cp.Variable(K)
         #objective = cp.Minimize(
         #        cp.sum(
@@ -107,8 +118,9 @@ def data_train():
         objective = cp.Minimize(cp.sum((cp.abs(y-X*b))))
         constraints = []
         prob = cp.Problem(objective, constraints)
-        result = prob.solve(verbose=True)
-        print(b.value)
+        result = prob.solve(verbose=verbose)
+        if verbose:
+            print(b.value)
 
         #X = np.asarray([[23,11.2],[54,52]])
         #y = np.asarray([11.2,52])
@@ -134,12 +146,13 @@ def data_train():
         pass
     print("FINISHED")
     print(all_coeffs)
-    data_tools.save_array(all_coeffs, os.path.join(dir_name, 'test_coefs'))
+    coef_filename = os.path.join(dir_name, 'test_coefs')
+    data_tools.save_array(all_coeffs, coef_filename)
 
-    return
+    return os.path.abspath(coef_filename)
     # plot the poles and zeros!
     for var in range(6):
-        b_vec = np.flip(reg.coef_[var*HISTORY:var*HISTORY+HISTORY])
+        b_vec = np.flip(reg.coef_[var*history:var*history+history])
         zeros, k = compute_zeros(b_vec)
         ax = plt.subplot(2,3,var+1)
         plot_zplane(zeros, k, ax)
