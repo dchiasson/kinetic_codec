@@ -14,6 +14,8 @@ import cvxpy as cp
 
 data_dir = '../../HuGaDB/HuGaDB/Data.parsed/'
 
+techniques = [CVXPY, SK_RIDGE, SK_LASSO, SK_LINEAR] = range(4)
+
 def plot_zplane(zeros, k, ax):
     if len(zeros) == 0:
         return
@@ -83,7 +85,43 @@ def test():
     data_tools.save_array(fil_coef, os.path.join(dir_name, 'newbuilt_auto_hetero_0'))
     print(fil_coef)
 
-def data_train(folder_list, history=3, is_cross=False, verbose=False):
+def do_cvxpy(X, y, verbose=False, guess=None):
+    b = cp.Variable(len(X[0]))
+    print("len b: {}".format(len(X[0])))
+    K = len(y)
+    l = 10 * K
+    print("L: {}".format(l))
+    objective = cp.Minimize(cp.sum((cp.abs(y-X*b))) + l*(cp.sum(cp.abs(b))))
+    #objective = cp.Minimize(cp.sum_squares(y - X*b))
+    #objective = cp.Minimize(cp.sum((cp.abs(y-X*b))))
+    constraints = []
+    #constraints = [cp.sum(b) == 1]
+    prob = cp.Problem(objective, constraints)
+    if guess is not None:
+        b.value = guess
+    #result = prob.solve(verbose=verbose)
+    #result = prob.solve(solver='OSQP', warm_start=True, verbose=verbose)
+    result = prob.solve(solver='SCS', normalize=True, warm_start=True, verbose=verbose, eps=1e-1, max_iters=50000)
+    if verbose:
+        print(b.value)
+    return b.value
+
+def compute_guess(stream, history, is_cross):
+    if is_cross:
+        guess = np.zeros(history * 6)
+        stream_guess = compute_guess(stream, history, False)
+        for index, value in enumerate(stream_guess):
+            guess[history*stream + index] = value
+    else:
+        guess = np.zeros(history)
+        if stream >= 3 and history > 1:
+            guess[history-1] = 1.3
+            guess[history-2] = -0.3
+        else:
+            guess[history-1] = 1.0
+    return np.asarray(guess)
+
+def data_train(folder_list, history=3, is_cross=False, technique=CVXPY, verbose=False):
     all_coeffs = []
     #for stream in [0, 3]:
     for stream in range(6):
@@ -96,48 +134,26 @@ def data_train(folder_list, history=3, is_cross=False, verbose=False):
             else:
                 X = np.concatenate((X,Xi))
                 y = np.concatenate((y,yi))
-            #print("features extracted from {} stream {}".format(data_dir, stream))
-        K = len(y)
+            #if verbose:
+            #    print("features extracted from {} stream {}".format(data_dir, stream))
         if verbose:
             print("features built for stream {}".format(stream))
-        #X = np.log(X)
-        #y = np.log(y)
-        #print(X)
-        #print(y)
-        if is_cross:
-            b = cp.Variable(6 * history)
-        else:
-            b = cp.Variable(history)
-        #e = cp.Variable(K)
-        #objective = cp.Minimize(
-        #        cp.sum(
-        #            cp.multiply((.5-e/(2*K)), cp.log(1-e/K)) +
-        #            cp.multiply((.5+e/(2*K)), cp.log(1+e/K))
-        #            ))
-        #constraints = [e == y-X*b]
-        objective = cp.Minimize(cp.sum((cp.abs(y-X*b))))
-        constraints = []
-        prob = cp.Problem(objective, constraints)
-        result = prob.solve(verbose=verbose)
-        if verbose:
-            print(b.value)
 
-        #X = np.asarray([[23,11.2],[54,52]])
-        #y = np.asarray([11.2,52])
-        #reg = LinearRegression(fit_intercept=False).fit(X,y)
-        #reg = LogisticRegression(fit_intercept=False).fit(X,y)
-        #reg = Lasso(fit_intercept=False, alpha=.1, max_iter=2000000)
-        #reg.fit(X,y)
-        #print(reg.coef_)
-        #reg.coef_[np.abs(reg.coef_) < (1.0/16)] = 0
-        #print(reg.coef_)
-        #print(reg.intercept_)
-        #all_coeffs.append(reg.coef_)
-        all_coeffs.append(b.value)
+        guess = compute_guess(stream, history, is_cross)
+
+        if technique == CVXPY:
+            b = do_cvxpy(X, y, verbose, guess)
+        if technique == SK_LASSO:
+            reg = Lasso(fit_intercept=False, alpha=.1, max_iter=2000000)
+            reg.fit(X,y)
+            b = reg.coef_
+        if technique == SK_LINEAR:
+            reg = LinearRegression(fit_intercept=False).fit(X,y)
+            reg.fit(X,y)
+            b = reg.coef_
+
+        all_coeffs.append(b)
     all_coeffs = np.asarray(all_coeffs)
-    #print(reg.score(X,y))
-    #print(np.linalg.norm(reg.coef_, ord=1))
-    #print(np.linalg.norm(reg.coef_, ord=2))
 
     dir_name = 'cross_fir'
     try:

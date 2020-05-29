@@ -18,7 +18,7 @@ label = [
 "Cross-stream Linear",
 ]
 
-data = [
+old_data = [
 1,
 6.39430101906924,
 8,
@@ -32,6 +32,21 @@ data = [
 16.1825627149527
 ]
 
+data = [
+1,
+3.97198,
+8.32,
+11.2521984763302,
+11.5705458816934,
+11.7966305364552,
+11.9954132525068,
+12.2158506666345,
+12.7460540373645,
+12.7288487737292,
+12.7041915646911,
+]
+
+
 fig = plt.figure(1)
 label_size = 13
 index = np.arange(len(label))
@@ -43,10 +58,10 @@ plt.xticks(index, label, fontsize=label_size, rotation=30, ha='right')
 plt.yticks(fontsize=label_size)
 plt.title('IMU Data Compression Using Various Techniques', fontsize=label_size*1.2, pad=20)
 plt.axvline(x=2.5, linewidth=1, color='k', ls='--')
-plt.ylim(0,23)
+plt.ylim(0,15)
 plt.xlim(-.5,10.5)
-fig.axes[0].text(1,18, 'Traditional\nMethods', ha='center', fontsize=label_size)
-fig.axes[0].text(6.5,20, 'Proposed Methods', ha='center', fontsize=label_size)
+fig.axes[0].text(1,11.5, 'Traditional\nMethods', ha='center', fontsize=label_size)
+fig.axes[0].text(6.5,13.5, 'Proposed Methods', ha='center', fontsize=label_size)
 fig.subplots_adjust(bottom=.4)
 
 plt.show()

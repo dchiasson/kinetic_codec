@@ -7,6 +7,8 @@
 \usepackage{cite}
 \usepackage{authblk}
 \usepackage[table,xcdraw]{xcolor}
+\usepackage{amssymb}
+\usepackage{amsmath}
 \begin{document}
 
 
@@ -22,8 +24,7 @@
 \maketitle
 
 \begin{abstract}
-Real-time kinematic data is central to many emerging technology applications, yet to date few techniques have been proposed to process and represent this relatively new information modality in an efficient manner. This paper explores techniques for the lossless compression of human kinematic IMU data. Techniques from traditional multimedia networks are compared with several novel approaches. Simple, computationally cheap techniques are shown to losslessly compress consumer-grade IMU kinematic data by a factor of almost twenty compared with traditional representations. Furthermore, these simple techniques are shown to approach the optimal linear compression level. Achieved compression was nearly identical between subjects and movement activities suggesting that attributes of the sensor itself are the primary factors influencing compressability of the IMU signal.
-All techniques discussed in this study are implemented and released as open source C code using fixed point computation which can be integrated into a variety of computational platforms. 
+Real-time kinematic data is central to many emerging technology applications, yet to date few techniques have been proposed to process and represent this relatively new information modality in an efficient manner. This paper explores techniques for the lossless compression of human kinematic IMU data. Techniques from traditional multimedia networks are compared with several novel approaches. Simple, computationally cheap techniques are shown to losslessly compress consumer-grade IMU kinematic data by a factor of ten to twenty, depending on movement activity, compared with traditional data representations. Furthermore, these simple techniques are shown to approach the optimal linear compression level. All techniques discussed in this study are implemented and released as open source C code using fixed point computation which can be integrated into a variety of computational platforms. 
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -54,23 +55,7 @@ $$H = -\sum_{i} P_ilog_2P_i$$
 
 Furthermore, coding techniques have been developed which approach this limit under various conditions as early as 1952 \cite{Huffman1952}. Many near optimal techniques now exist with varying complexity and for various signal classes. Coding is thus considered a solved problem.
 
-Modeling on the other hand must be revisited for each new signal class and application. Due to the pigeon hole principal, no algorithm can compress every possible input. A model which performs well on one class of signals will likely perform poorly on a signal outside of that class. To the authors' knowledge, no previous work has directly addressed the modeling problem for kinematic data signals. This provides the motivation for the current work.
-
-TODO: rewrite paragraphs below, maybe drop or move to method
-
-The goal of the model is to produce an accurate PMF with minimum entropy. Intuitively this means that compression is higher the more "sure" the model is about some occurrences over other ones. If an optimal encoder is used, the compression ratio can be regarded as a quantitative measurement of the model's understanding of the underlying signal. Because of this, we expect the performance of various signal models to give us insight into the content of the kinematic signal.
-
-The same coder and decoder is employed by all compression techniques explored in this work, and techniques are thus identified by the model used. Models are presented as predictive algorithms. Using this paradigm, the residual is the difference between each input symbol and what the model predicted the symbol to be. The compressed size is the first order entropy of the residual signal.
-
-
-Consider deleting below:
-
-TODO: why do we assume our signal is geometrically distributed about the mean!?
-TODO: relationship for natural signals of residual signal and compression ratio
-
-In this work, the maximum likelihood occurrence according to the model will be referred to as the prediction. The difference between the prediction and the actual sample will be referred to as the residual. For practical implementation, it is advantageous to convert the original signal into the residual signal before coding so that the coder can be computationally optimized to compute encodings for zero mean random variables (or same distribution? not recalculating ).
-
-Define stream? node? anything else?
+Modeling on the other hand must be revisited for each new signal class and application. Due to the pigeon hole principal, no algorithm can compress every possible input. Each model must make a implicit decision about the scope of signals that will be compressed. To the authors' knowledge, no previous work has directly addressed the modeling problem for kinematic data signals. This provides the motivation for the current work.
 
 We hypothesize that compression ratios will be comparable to those achieved in lossless audio compression. We also hypothesize that the best performing codec will utilize some cross axis correlation and be informed by physics based models.
 
@@ -122,15 +107,30 @@ Derivation of our optimal linear problem and implementation
 
 \subsection{Optimal Model}
 
-To complete the context for our proposed modeling techniques, we numerically compute the optimal linear model for our data. To do so, we will formulate our model as a linear system with the error signal, or residual defined as
-$$\tilde{r} = Ax-b$$
-Where each row of A is the past history of our signal, each element of b is the current sample, and x is our linear predictor.
+To complete the context for our proposed modeling techniques, we numerically compute the optimal linear model for our data. To do so, we will formulate our model as a linear prediction with the error, or residual signal defined as
+$$\tilde{e} = Ax-b$$
+TODO: handle negatives!
+Where each row of $A$ is the past history of our signal, each element of $b$ is the current sample, and $x$ is our model. For our application, we are interested in the residual signal which can be encoded into the minimum number of bits. To compute this, we consider the effect of Rice-Golomb coding on our residual signal. A Rice-Golomb encoding of order $M \in \mathbb{N}_0$, splits each $\tilde{e}_i$ into a quotient and remainder:
+$$ q_i = \lfloor \frac{\tilde{e}_i}{2^M} \rfloor, r_i = \tilde{e}_i - q_i * 2^M  $$
+The remainder $r_i$ is truncated binary encoded at a fixed size of $M$ bytes, while the quotient $q_i$ is unary encoded. The size in bits of each Rice-Golomb encoded element of the residual signal is thus:
 
-Rice-Golomb encoding
+$$ M + \lfloor\frac{\tilde{e}_i}{2^M}\rfloor + 1$$
+If we relax our rounding operation, the size of each element can be approximated as a linear function of $\tilde{e}_i$ which leads to an approximate compressed size of:
+ $$k+kM+ 2^{-M}\sum_{i=0}^k \tilde{e}_i$$
+ Minimizing this value with $l$-1 normalization is equivalent to the optimization problem:
+ 
+\begin{equation*}
+\begin{aligned}
+& \underset{x}{\text{minimize}}
+& & \left\Vert Ax-y \right\Vert_1 + \lambda\left\Vert x \right\Vert_1
+\end{aligned}
+\end{equation*}
+
+$l$-1 normalization is used since it encourages sparsity in the model. Sparsity is desirable in this application as it reduces quantization error of the model coefficients and reduces the fixed point arithmetic error during execution. Both of these sources of error are significant when performing fixed point arithmetic. Since this problem is convex, it can readily be solved with a variety of numerical solvers. For this study, python bindings for the Splitting Conic Solver were used\cite{ocpb:16}\cite{scs}\cite{cvxpy}.
+
 \subsection{Implementation}
 
-
-To show algorithm performance in a realistic scenario, as well as to provide tools of benifit to the community, the algorithms in this study have been implemented in the C programming language and released as open-source code found at \url{https://github.com/dchiasson/kinetic_codec}. TODO[change the name of the repo, clean up docs, and release]. The choice of programming language as well as the restriction to integer arithmetic allow this code to be easily incorporated into programs executing on either a traditional computer or embedded computation platforms, even those without a floating-point unit.
+To show algorithm performance in a realistic scenario, as well as to provide tools of benifit to the community, the algorithms in this study have been implemented in the C programming language and released as open-source code found at \url{https://github.com/dchiasson/kinetic_codec}. TODO[change the name of the repo, clean up docs, and release]. The choice of programming language as well as the restriction to integer arithmetic allow this code to be easily incorporated into programs executing on either a personal computer or embedded computation platforms, even those without a floating-point unit.
 
 \section{Results}
 
@@ -227,6 +227,7 @@ This observation, along with the surprisingly poor performance of our physics ba
 
 An alternate explanation for this result may be the aliasing of the kinematic signal. 60Hz is is common for consumer grade IMUs, but it is generally agreed to be well below what is required to fully capture human movement[TO CITE]. Fast movements such as running are often sampled at 1000Hz. If the signals are significantly undersampled, we may be loosing much of the high frequency information that would differentiate fast movements from slow movements. [TODO: research effect of aliasing on information content]
 
+expected redundancy between accelerometer and gyroscope information. If such a linear redundancy exists, it is too small to be usable in this practical application.
 
 Was poor performance of complex algorithms due to precision issues?
 
@@ -257,10 +258,29 @@ Foundation of China (51875347).
 
 
 
-\bibliography{test_bibtex}{}
+\bibliography{test_bibtex,other_citations}{}
 \bibliographystyle{plain}
 %TODO: Make sure bib style is correct!
 %\bibitem{IEEEhowto:kopka}
+
+
+\section*{Scratch Section}
+TODO: rewrite paragraphs below, maybe drop or move to method
+
+The goal of the model is to produce an accurate PMF with minimum entropy. Intuitively this means that compression is higher the more "sure" the model is about some occurrences over other ones. If an optimal encoder is used, the compression ratio can be regarded as a quantitative measurement of the model's understanding of the underlying signal. Because of this, we expect the performance of various signal models to give us insight into the content of the kinematic signal.
+
+The same coder and decoder is employed by all compression techniques explored in this work, and techniques are thus identified by the model used. Models are presented as predictive algorithms. Using this paradigm, the residual is the difference between each input symbol and what the model predicted the symbol to be. The compressed size is the first order entropy of the residual signal.
+
+
+Consider deleting below:
+
+TODO: why do we assume our signal is geometrically distributed about the mean!?
+TODO: relationship for natural signals of residual signal and compression ratio
+
+In this work, the maximum likelihood occurrence according to the model will be referred to as the prediction. The difference between the prediction and the actual sample will be referred to as the residual. For practical implementation, it is advantageous to convert the original signal into the residual signal before coding so that the coder can be computationally optimized to compute encodings for zero mean random variables (or same distribution? not recalculating ).
+
+Define stream? node? anything else?
+
 
 
 \end{document}

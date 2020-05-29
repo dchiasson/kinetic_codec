@@ -1,0 +1,46 @@
+This is BibTeX, Version 0.99d (TeX Live 2017/Debian)
+Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
+The top-level auxiliary file: chiasson_draft_1_2.aux
+The style file: plain.bst
+Database file #1: test_bibtex.bib
+You've used 4 entries,
+            2118 wiz_defined-function locations,
+            524 strings with 4673 characters,
+and the built_in function-call counts, 1041 in all, are:
+= -- 104
+> -- 34
+< -- 0
++ -- 14
+- -- 10
+* -- 58
+:= -- 184
+add.period$ -- 11
+call.type$ -- 4
+change.case$ -- 17
+chr.to.int$ -- 0
+cite$ -- 4
+duplicate$ -- 39
+empty$ -- 92
+format.name$ -- 10
+if$ -- 212
+int.to.chr$ -- 0
+int.to.str$ -- 4
+missing$ -- 3
+newline$ -- 22
+num.names$ -- 8
+pop$ -- 18
+preamble$ -- 1
+purify$ -- 13
+quote$ -- 0
+skip$ -- 30
+stack$ -- 0
+substring$ -- 70
+swap$ -- 4
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 16
+warning$ -- 0
+while$ -- 12
+width$ -- 5
+write$ -- 42

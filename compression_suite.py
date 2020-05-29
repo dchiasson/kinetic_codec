@@ -5,12 +5,13 @@ import subprocess
 
 from machine_learning import optimal_fir
 
+SENS = ['acc', 'gyro']
+LOCS = ['rf','rs','rt','lf','ls','lt']
+ACTS = ['bicycling','running','sitting','standing','walking']
+DIMS = ['x','y','z']
+SUBJ = range(1, 18+1)
+
 def get_file_list(data_type):
-    SENS = ['acc', 'gyro']
-    LOCS = ['rf','rs','rt','lf','ls','lt']
-    ACTS = ['bicycling','running','sitting','standing','walking']
-    DIMS = ['x','y','z']
-    SUBJ = range(1, 18+1)
 
     folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/files/"
     csv_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/"
@@ -115,11 +116,15 @@ def run_best_k(technique, filter_loc, data_loc, starting_k=12, verbose=False):
 def process_data_list(technique, filter_loc, data_list, verbose=False):
     total_size = 0
     for data in data_list:
+        #print(data)
         best_size, best_k = run_best_k(technique, filter_loc, data, 10, verbose)
         if verbose:
           print(best_size, best_k)
+        csv_size = os.path.getsize(os.path.join(data,'acc_x')) * 6 * 8.32
+        #print("K {}, CR{}".format(best_k, csv_size/best_size))
+        print(csv_size/best_size)
         total_size += best_size
-    print(total_size)
+    print("total_size: {}".format(total_size))
     return total_size
 
 def print_csv_size(data_loc):
@@ -157,8 +162,8 @@ def get_flac_compressed_size(data_loc):
 def run_all_on_data(data_type):
 
     data_list, csv_folder = get_file_list(data_type)
-    """
 
+    """
     #####################
     # Reference formats #
     #####################
@@ -166,6 +171,8 @@ def run_all_on_data(data_type):
     print_zip_size(csv_folder)
     print_binary_size(csv_folder)
 
+    """
+    print("##Rice")
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
     process_data_list(technique,  filter_loc.format(0,0), data_list)
@@ -173,6 +180,7 @@ def run_all_on_data(data_type):
     ##########
     # Spline #
     ##########
+    print('##spline')
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/natural_spline_pred/condition0/2"
     process_data_list(technique, filter_loc, data_list)
@@ -182,26 +190,33 @@ def run_all_on_data(data_type):
     ###############################
     technique = "auto-homo"
     filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    print('##5 deg')
     process_data_list(technique, filter_loc.format(6,19), data_list)
+    print('##4 deg')
     process_data_list(technique, filter_loc.format(5,19), data_list)
+    print('##3 deg')
     process_data_list(technique, filter_loc.format(4,19), data_list)
+    print('##2 deg')
     process_data_list(technique, filter_loc.format(3,13), data_list)
+    print('##1 deg')
     process_data_list(technique, filter_loc.format(2,8), data_list)
+    print('##0 deg')
     process_data_list(technique, filter_loc.format(1,1), data_list)
 
-    filter_loc = optimal_fir.data_train(data_list, 3, False)
+    print('##AR')
+    filter_loc = optimal_fir.data_train(data_list, 3, is_cross=False, technique=optimal_fir.CVXPY, verbose=True)
     technique = "auto-hetero"
     #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_{}"
     #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/built_auto_hetero_2_2"
     #process_data_list(technique, filter_loc.format(2), data_list)
-    process_data_list(technique, filter_loc, data_list)
+    process_data_list(technique, filter_loc, data_list, verbose=False)
 
-    """
 
-    filter_loc = optimal_fir.data_train(data_list, 3, True)
+    print('##MVAR')
+    filter_loc = optimal_fir.data_train(data_list, 2, is_cross=True, technique=optimal_fir.CVXPY, verbose=True)
     technique = 'cross-hetero'
     #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir_old/cross_hetero_{}"
-    process_data_list(technique, filter_loc, data_list)
+    process_data_list(technique, filter_loc, data_list, verbose=False)
 
 
 def cross_homo():
@@ -294,16 +309,43 @@ def test_2():
     run_iteration(technique, 5, filter_loc, data_loc, True)
 
 if __name__ == '__main__':
-    #test_2()
-    #data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/"
-    data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed.new/"
-    run_all_on_data(data_loc)
 
-    #poly_reg()
-    #cross_homo_total()
-    #test_data()
-    
-    #data_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed/processed_5_9_12_/training/"
-    #technique = "auto-hetero"
-    #filter_loc = "~/Documents/David/research/kinetic_codec/machine_learning/cross_fir/auto_hetero_{}"
-    #run_iteration(technique, 5, filter_loc.format(2), data_loc)
+    run_all_on_data("all")
+    """
+    for person in SUBJ:
+        if person == 2:
+            continue
+        if person == 1:
+            continue
+        print("Subject {}".format(person))
+        run_all_on_data(person)
+    """
+    """
+
+    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    for location in LOCS:
+        print("Location {}".format(location))
+        data_list, csv_folder = get_file_list(location)
+        technique = "auto-homo"
+        process_data_list(technique, filter_loc.format(1,1), data_list)
+        #run_all_on_data(location)
+
+    for action in ACTS:
+        continue
+        print("Action {}".format(action))
+        data_list, csv_folder = get_file_list(action)
+        technique = "auto-homo"
+        process_data_list(technique, filter_loc.format(1,1), data_list)
+        #run_all_on_data(action)
+    """
+    """
+    filters = os.listdir("cross_fir")
+    data_list, csv_folder = get_file_list("all")
+    filter_dir = "/home/chiasson/Documents/David/research/kinetic_codec/cross_fir/"
+    filters = filter(lambda x:os.path.getsize(x)==288, [os.path.join(filter_dir, x) for x in os.listdir(filter_dir)])
+    #print(list(filters))
+
+    for f in filters:
+        technique = 'cross-hetero'
+        process_data_list(technique, f, data_list, verbose=False)
+    """

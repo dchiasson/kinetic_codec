@@ -1,0 +1,307 @@
+
+
+\documentclass[journal]{IEEEtran}
+
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{cite}
+\usepackage{authblk}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\begin{document}
+
+
+\title{Lossless Compression of Human Movement IMU Signals}
+% Compression of Kinematic Data
+% Compression of Human Movement Data
+
+\author[1]{David~Chiasson}
+\author[1]{Junkai~Xu}
+\author[1]{Peter~Shull}
+\affil[1]{State Key Laboratory of Mechanical System and Vibration, School of Mechanical Engineering, Shanghai Jiao Tong University}
+
+\maketitle
+
+\begin{abstract}
+Real-time human movement inertial measurement unit (IMU) signals are central to many emerging medical and technological applications, yet few techniques have been proposed to process and represent this information modality in an efficient manner. In this paper, we explore methods for the lossless compression of human movement IMU data and compute compression ratios as compared with traditional representation formats on a public corpus of human movement IMU signals for walking, running, sitting, standing, and biking human movement activities. Delta coding was the highest performing compression method, which compressed walking, running and biking data approximately 10 times smaller and sitting and standing data 18 times smaller than the original CSV formats. Furthermore, delta encoding is shown to approach the a posteriori optimal linear compression level. All methods are implemented and released as open source C code using fixed point computation which can be integrated into a variety of computational platforms. These results could serve to inform and enable human movement data compression in a variety of emerging medical and technological applications.
+\end{abstract}
+
+\begin{IEEEkeywords}
+kinematic data, human movement, compression, codec
+\end{IEEEkeywords}
+
+
+
+\section{Introduction}
+
+\IEEEPARstart{M}{any} emerging technological and medical applications rely on real-time human movement inertial measurement unit (IMU) signals as a crucial component, including virtual reality\cite{Ahmad2013}, autonomous navigation\cite{Campbell2018}, internet of things\cite{Fernandez-Carames2018}, activity monitoring\cite{Yang2010}\cite{Filippeschi2017}, physical therapy\cite{Patel2012}\cite{Shull2014}, and human performance\cite{Camomilla2018}\cite{GobinathAroganam2019} among others. These applications have been enabled by the recent explosion of inexpensive inertial based sensors (IMUs) along with mobile computation power to process this data in real time. The human movement IMU signal represents a nascent field of multimedia processing which is starkly under-developed compared to the existing maturity of text, audio, and visual type signal processing methods. This is evidenced by the lack of standards or tools for handling movement data. To enable these emerging applications, efficient and standard methods for representing and processing movement signals are needed. Compression can be a crucial component of the this missing toolset as it improves situations of limited transmission bandwidth and limited storage space.
+
+Compression seeks to represent information in a space efficient manner. This is generally done by exploiting spatio-temporal redundancy, correlation, and smoothness\cite{Sayood2006}. A lossless compression algorithm can be divided into two components, modeling and coding/decoding (Figure \ref{fig:general_compressor})\cite{Nelson1996}. The model incorporates prior understanding of the signal class to be compressed. It estimates a probability mass function which represents the likelihood of occurrence for each possible input symbols. A dynamic model is one which changes its probability estimates after new input symbols are received. The model is sometimes described as a transformation, which refers to some reversible operation which changes the signal into a lower entropy or easier to predict form.  The Coder uses the probability mass function produced by the model to compute a unique variable length encoding for each possible symbol. Short encodings are assigned to likely symbols, and long encodings are assigned to unlikely symbols such that the average length of the compressed signal is minimized. The decompressor uses an identical model to provide the same probability mass function to the decoder which is used to revert each code back into the original symbol. If the model is dynamic, this output is used to update the model for future predictions.
+
+
+\begin{figure*}
+  \includegraphics[width=\linewidth]{general_compressor4.eps}
+  \caption{Generalized compression and decompression. Modeling and coding are independent. The model is mathematically identical for compression and decompression. Coder and decoder perform inverse operations parameterized by the probability distribution.}
+  \label{fig:general_compressor}
+\end{figure*}
+
+The coding component is well understood. The theoretical limit of coding performance on a signal with a know probability distribution is given by Shannon's noiseless coding theorem\cite{Shannon1948} as first order entropy:
+
+$$H = -\sum_{i} P_ilog_2P_i$$
+
+While Shannon developed several efficient coding techniques, the first optimal technique was developed in 1952 by Huffman\cite{Huffman1952}. While Huffman's technique was proven optimal, it made the assumption that output codes must be an integer number of bits, which prohibited it from reaching Shannon's limit under certain conditions. Arithmetic coding was developed to address this deficiency, showing better performance particularly in high compression situations\cite{Witten1987}. Another technique, Golomb coding and the Rice special case, has experienced significant adoption in industry because of the efficient binary computation, and the ability to encode online without needing a preliminary pass through the data to compute the probability distribution\cite{Golomb1966}\cite{F.Rice1979}. Because of the many efficient and optimal techniques available, some consider coding to be a solved problem\cite{Mahoney2013}.
+
+Modeling on the other hand must be revisited for each new signal class and application. Due to the pigeon hole principal, no algorithm can compress every possible input\cite{Kolmogorov1965}. Each model must make an implicit decision about the class and scope of signals that will be compressed. To the authors' knowledge, no previous work has directly addressed the modeling problem for the human movement IMU signal. This provides the motivation for the current work.
+
+This study explores a range of linear predictive models applied to the human movement signal as quantified by 6-axis IMUs. A corpus of representative human movement IMU signals was selected to demonstrate the compression performance of each model. To put the performance in context, several traditional representation formats are selected. The compression performance of these traditional formats provides a lower bound for the performance of a useful compression method. Finally, the optimal linear predictive models are computed numerically utilizing full knowledge of the signals in the corpus. The compression performance of these optimal models provide an upper bound on the performance of our proposed methods.
+
+ADD COMPRESSION CURRENT STATE HERE
+
+\section{Methods}
+
+
+The Human Gait Database (HuGaDB)\cite{Chereshnev2018} was selected as a corpus to meaningfully and repeatable demonstrate the performance of various compression methods. HuGaDb is a public dataset of six-axis IMU signals collected from six different body segments (right and left foot, right and left shin, right and left thigh) of 18 healthy subjects performing various movement activities (including walking, running, sitting, standing, and biking) sampled at 60Hz. This database was selected because it allows the comparison of compression methods for a variety of movement activities. Signals are sampled as 16 bit signed integers. The authors of HuGaDB indicate in their online repository that some of their collected data contains corrupted gyroscope signals. Such data has been excluded from this study. The remaining data is separated by subject, movement activity, trial, and body segment, to produce a total of 1626 separate test cases to compare the performance of proposed compression methods.
+
+With the exception of traditional data representation formats, all compression methods in this work will be presented as predictive autoregressive linear models. The predictive model will estimate the current sample given past input. The difference between the model prediction and observed sample will be referred to as the residual signal. All compression methods will encode this residual signal using Golomb-Rice coding to produce the final compressed data. Golomb-Rice coding is computationally efficient on binary base computational platforms, and has been shown to approach optimal coding if the input signal is geometrically distributed\cite{Golomb1966}\cite{F.Rice1979}.
+
+\subsection{Proposed Compression Methods}
+
+Several restrictions are placed on the methods considered in this study. First, a viable algorithm must be causal. This is a basic requirement for an algorithm to be implemented in a real-time application. We also chose to only consider algorithms with zero filter delay. Since our sensors operate at a relatively low sampling frequency of 60Hz, a delay of one sample would be 16ms which is significant for modern information networks.
+
+All algorithms considered in this paper are node independent. The model for each signal considers at most the information from the six co-located signals including it's own past input. While it is likely that utilizing inter-node correlation could produce better compression ratios, especially if a human biomechanics model were introduced, such an approach would limit the usefulness of said algorithm to a specific placement of nodes on the body.
+
+Only lossless compression methods are considered in this study. The reason for this is that designing a lossy compression method requires a well defined distortion criteria\cite{Sayood2006}. This criteria is a value judgment about what type and magnitude of distortion is acceptable for the compressed signal. Defining a distortion criteria for audio and visual signals, while not trivial, is certainly tractable as there is generally a single well-defined application of the signals, namely consumption by the human ear and eye\cite{Limb1979}\cite{Painter2000}. Other signal classes such as text and binary data have sensitive applications that cannot tolerate any error in the signal, and thus lossy compression methods are not considered. The human movement IMU signal on the other hand has an array of applications, each of which is likely to have different requirements for acceptable and unacceptable distortions of the movement signal. In the absence of a specific application, no justification can be made for discarding any portion of information.
+
+In practice, the implementation of a strictly lossless algorithm turns out to be non-trivial. This is because the standard for floating point computation IEEE 754 \cite{Society2008} is not sufficiently stringent to guarantee identical results on various implementations\cite{Monniaux2008}\cite{Goldberg1991}. For example, rounding is permitted to differ slightly between two computation platforms, or the same computation platform at two points in time. Additionally, a compiler or interpreter which processes the source code for an algorithm implementation will often utilize mathematical properties such as commutativity to optimize computation. This may result in different machines performing floating point operations in a different order which could lead to differing results even if each rounding operation were well defined by IEEE 754. To avoid both of these scenarios and guarantee identical results across diverse computational platforms, all algorithms in this study were implemented using integer operations and fixed-point 16.16 precision. There is significant cost associated with this technical decision. Namely that quantization error is independent of magnitude. This can lead to significant numerical issues for some algorithms.
+
+All compression methods in this study were implemented in the C programming language using fixed point 16.16 computation. The source code has been released at \url{https://github.com/dchiasson/kinetic_codec}. The choice of programming language as well as the restriction to use integer arithmetic allow this code to be incorporated into programs on a diverse array of computation platforms, even those without a floating-point unit. The hope of the authors is that this code can be a starting point for academic or industry developers implementing some human movement application.
+
+The following lossless compression methods are proposed in this study:
+\begin{itemize}
+  \item \textbf{Delta encoding} Current sample is predicted to be equivalent to the previous sample so that the difference between the two is encoded: $\hat{x}[n] = x[n-1]$. If a signal varies slowly with time, this signal will be smaller than the original signal. This method can be considered 0-order polynomial regression.
+  \item \textbf{Linear extrapolation} Current sample is estimated as a linear extrapolation from previous samples. Also known as first order polynomial regression. Linear extrapolation from a regression of the past two samples results in the estimator: $\hat{x}[n] = 2x[n-a] - 1x[n-2]$ 
+  \item \textbf{\boldmath$2^{nd}$ to \boldmath$5^{th}$ order polynomial regression} These methods assumes that the signal is a polynomial which is estimated from a least squares regression of past samples. This polynomial is then extended to get a prediction of the current sample.
+\begin{equation*}
+\begin{aligned}
+\hat{x}[n] = \sum_{i=0}^{d}b_i(p+1)^i
+%\label{eq:poly_reg}
+\end{aligned}
+\end{equation*}
+Where $d$ is the polynomial order and $p>d$ is the number of past samples included in the regression. The coefficients $\mathbf{b}$ may be found via least squares regression.
+\begin{equation*}
+\begin{aligned}
+& \underset{\mathbf{b}}{\text{minimize}}
+& & \sum_{j=1}^{p} \left( x[n-j] - \sum_{i=0}^{d} b_i(p-j+1)^i \right)^2
+%\label{eq:poly_reg}
+\end{aligned}
+\end{equation*}
+The resulting prediction $\hat{x}[n]$ is a linear combination of past samples or an autoregressive model of order $p$.
+
+
+  \item \textbf{Spline extrapolation} A spline is the minimum curvature piece-wise polynomial which connects a set of points. It is commonly used for interpolation, namely computer graphics smoothing. This method was selected as splines are known to avoid Runge's phenomenon which is witnessed when extrapolating higher order polynomials. Results from the cubic spline with natural boundary conditions are presented in this paper. The cubic spline is a piecewise cubic function 
+$$
+f_i(n) = a_in^3  + b_in^2 + c_in + d_i \quad n \in(n_i, n_{i+1}) \\
+$$
+which is smooth
+$$
+\frac{d}{dn} f_i(n_{i+1}) = \frac{d}{dn} f_{i+1}(n_{i+1}) \quad
+$$
+and passes through the set of $p$ past samples.
+$$
+f(n) = x[n] \quad
+$$
+Choosing natural boundary conditions,
+$$
+\frac{d^2}{dn^2}f_1(n_1) = \frac{d^2}{dn^2}f_{p-1}(n_p) = 0 \quad
+$$
+we can extrapolate the spline to predict the next sample.
+$$
+\hat{x}[n_{p+1}] = f_{p-1}[n_{p+1}]
+$$
+Like polynomial regression, spline extrapolation is also an auto-regressive linear model.
+\end{itemize}
+
+
+\subsection{Traditional Representation Formats}
+To provide a lower bound for the useful performance of compression methods, several traditional data representation formats are chosen as reference. In this study, the baseline data format (exhibiting a compression ratio of one) is comma separated value (CSV), a simple text based format which is the de-facto standard for storing sensor information. Performance of each compression method is assessed by computing the compression ratio CR relative to CSV via the following formula:
+$$CR = \frac{\textrm{size of CSV file}}{\textrm{size of compressed file}}$$
+
+In total, the following three traditional data representation formats were chosen to provide context for our results:
+
+\begin{itemize}
+  \item \textbf{CSV} Text based format considered the de facto standard. CSV files are ANSI encoded and formatted to have a constant length sample format to eliminate a source of randomness in our CR computation. Due to this decision, Binary format will have the same CR regardless of data properties. 
+  \item \textbf{Binary} The optimal fixed size format. In our corpus, every sample is two bytes. This would be the optimal compression if each sample were an IID random variable uniformly distributed across the sample space.
+  \item \textbf{ZIP compression of CSV} ZIP is a general purpose file compression format integrated into all major computer systems. ZIP was executed using the DEFLATE method \cite{Deutsch1996} and a compression level of 6 (Linux command: \textit{zip -6 --compression-method deflate}).
+\end{itemize}
+
+\subsection{Optimal Linear Compression}
+
+To complete the context for our proposed compression methods and provide an upper limit on compression performance, we numerically compute the optimal linear predictive model for our data. To do so, we will formulate our model as an auto-regressive process of order $p$ and define the prediction error or residual signal as:
+
+\begin{equation}
+e[n] = x[n] - \sum_{k=1}^{p}a_{k}x[n-k]
+\label{eq:error}
+\end{equation}
+where $a_k$ is the linear contribution of sample $k$ in the past to our current prediction. Equation \eqref{eq:error} can expressed be in concise matrix notation as: 
+
+$$\mathbf{e} = \mathbf{x} - \mathbf{Xa}$$
+
+For our application, we are interested in the residual signal $\mathbf{e}$ which can be encoded into the minimum number of bits. To compute this, we consider the effect of Rice-Golomb coding on our residual signal. A Rice-Golomb encoding first splits each residual $e[n]$ into a quotient and remainder portion:
+
+$$ q[n] = \lfloor \frac{e[n]}{2^m} \rfloor\quad \textrm{and} \quad r[n] = e[n] - q[n] * 2^m  $$
+
+$\lfloor \cdot \rfloor$ denotes the floor operation and $m \in \mathbb{N}_0$ is the Rice-Golomb order which is selected based on signal statistics\cite{Kiely2004}\cite{Merhav2000}. The remainder $r[n]$ is truncated binary encoded at a fixed size of $m$ bytes, while the quotient $q[n]$ is unary encoded, requiring $q[n] + 1$ bits. The size in bits of each Rice-Golomb encoded element of the residual signal is thus:
+
+$$ m + \lfloor\frac{e[n]}{2^m}\rfloor + 1$$
+
+If we relax our rounding operation, the size of each element can be approximated as a affine function of $e[n]$. The total compressed size for a signal of length $l$ has an approximate size:
+ $$l+lm+ 2^{-m}\sum_{n=0}^l e[n]$$
+ Minimizing this value with $l$-1 normalization is equivalent to the optimization problem:
+ 
+\begin{equation}
+\begin{aligned}
+& \underset{\mathbf{a}}{\text{minimize}}
+& & \left\Vert \mathbf{x}-\mathbf{Xa} \right\Vert_1 + \lambda\left\Vert \mathbf{a} \right\Vert_1
+\label{eq:optimize}
+\end{aligned}
+\end{equation}
+
+The key takeaway from this result, is that compression is proportional to the total \textit{absolute prediction error} of the model, and not the \textit{squared error}. $l$-1 normalization is used since it encourages sparsity in the model. Sparsity is desirable in this application as it reduces quantization error of the model coefficients and reduces the fixed point arithmetic error during execution. Since this problem is convex, it can readily be solved with a variety of numerical solvers. For this study, python bindings for the Splitting Conic Solver were used\cite{ocpb:16}\cite{scs}\cite{cvxpy}.
+
+If problem \eqref{eq:optimize} is solved considering past history of each stream, then the model for each axis of accelerometer and gyroscope can be computed independently. This model will be referred to as the optimal auto-regressive model (AR). However, if we also take into account the past history of other axes and sensors, then the model can account for any cross-correlation which may result from the interrelated nature of rotation and orientation information. The residual signal \eqref{eq:error} can be rewritten using this expanded model for stream $i$ as:
+
+\begin{equation*}
+e_i[n] = x_i[n] - \sum_{j=1}^{s}\sum_{k=1}^{p}a_{i,j,k}x_j[n-k]
+\end{equation*}
+
+where $a_{i,j,k}$ is now the linear contribution of the sample $k$ in the past of stream $j$ to our current prediction of stream $i$. Solving problem \eqref{eq:optimize} with this expanded system will be referred to as the optimal multivariate autoregressive model (MVAR). Note that both AR and optimal MVAR models are non-causal and expensive to compute, and are thus disqualified as a proposed method. Instead they serve as upper-limit reference points for evaluation of other proposed methods.
+
+\subsection{Data Analysis}
+
+To determine the statistical significance of our results, we follow the recommendations of \cite{Demsar2006}. To compare the CRs of our proposed compression methods, we begin with the Friedman Test \cite{Friedman1937} which is a non-parametric test for significant differences between algorithm performance which considers the ranks of each algorithm's performance per test case. A non-parametric test is necessary since our corpus does not meet the normal distribution assumption of many parametric tests. Figure \ref{fig:movements} confirms that our data is indeed bi-modal. If the null-hypothesis is rejected, we proceed with the Nemenyi post-hoc test \cite{Nemenyi1963} to determine which pairs of methods differ significantly (at $p=.05$). Statistical analysis of performance is presented for proposed method results over the entire corpus.
+
+Additionally, we wish to determine if a proposed method has significantly different performance on different classes of data. The Friedman test is not appropriate for this scenario since we are comparing the performance of one algorithm across different groups of test cases, and rank is undefined. However, test cases that are in the same class are more likely to follow a normal distribution, so the parametric ANOVA test is used\cite{Fisher1959}. If the null-hypothesis is rejected, we proceed with the Tukey HSD post-hoc test \cite{Tukey1949} to determine which pairs of data classes experience significantly different compression. This statistical analysis is presented for the highest performing proposed method.
+
+\section{Results}
+
+All proposed compression methods outperformed all traditional methods in size efficiency for every data class and nearly every test case (Table \ref{table:all_stats}). Figure \ref{fig:ranks} shows delta encoding consistently ($p<0.001$) achieved the highest compression of the proposed methods (CR=12.75), and each higher degree polynomial performed progressively worse with 5th degree polynomial consistently ($p<0.001$) the worst performing (CR=11.25). The spline method was not found to be significantly different than linear or 2nd degree polynomial ($p>.5$). Significant differences were also not found between 3rd and 4th degree polynomials ($p=.25$) or between 2nd and 3rd degree polynomials ($p=.19$) The CR of delta encoding approached optimal AR and MVAR model compression for all data class.
+
+Low movement activities such as sitting (CR=17.87) and standing  (CR=18.69) were compressed significantly more ($p<0.001$) than high movement activities running (CR=9.52) walking (CR=9.95) and biking (CR=10.96). Significant differences were not found within the low movement activity group ($p=.9$) or the high movement activity group ($p>.13$). (Figure \ref{fig:movements}). Body segments did not show significant variation in CR ($p>.05$).
+
+\begin{figure}
+
+  \includegraphics[width=\linewidth]{diff.eps}
+  \caption{Mean compression ratio (original size / compressed size) of the best performing proposed technique, delta encoding, compared with traditional CSV. Delta encoding approaches the optimal auto-regressive compression level.}
+  \label{fig:main_results}
+  
+\end{figure}
+\begin{figure}
+
+  \includegraphics[width=\linewidth]{movement.eps}
+  \caption{Distribution of compression ratio (original size / compressed size) of each movement activity using delta encoding. Activities with less movement intensity experience greater compression.}
+  \label{fig:movements}
+  
+\end{figure}
+
+\begin{figure}
+  \includegraphics[width=\linewidth]{nemenyi.eps}
+  \caption{Mean ranks of proposed methods compared using the Nemenyi test. Groups of methods that are not significantly different (at $p = 0.05$) are connected.}
+  
+  \label{fig:ranks}
+\end{figure}
+
+\begin{table*}[htbp]
+\caption{Compression ratios for all methods across movement activity and body segment}
+\includegraphics[width=\linewidth]{results_record.eps}
+Groups of data classes and methods without significantly different compression ($p\geq0.05$) are indicated by bars below and to the right of the table respectively. Specifically, horizontal bars represent statistical analysis of the Delta compression method applied to each data class, while vertical bars represent statistical analysis of each proposed methods applied to all data. Computational complexity of implementation is shown after each proposed method.
+\label{table:all_stats}
+\end{table*}
+
+\section{Discussion}
+
+These results show that many methods result in a significant compression over the traditional representation formats of CSV, ZIP, and binary. Using any of the proposed methods for a human movement IMU application represented in our corpus will likely result in significant space improvement.
+
+Delta encoding mathematically dominated all proposed compression methods by providing greater compression for nearly all test-cases (CR=12.75, $p<0.001$) while having lower computation requirements. This is not entirely surprising as delta encoding as often chosen as the lossless compression model in other domains\cite{Blalock2018}\cite{Coalson2008}. Each increasing order of polynomial regression produced worse compression (CR=12.22, 12.0, 11.8, 11.57, 11.25). This is likely because higher degree polynomial predictors suffer from poor white noise attenuation \cite{Tanskanen2000} causing an effect known as Runge's phenomenon. Higher degree polynomial predictors are seen to require disproportionately higher computation as a regression over more past samples were found to lead to better predictions. This is in contrast to zero-degree polynomial regression, where all orders of simple moving averages were found to under-perform delta encoding. Only the best performing predictor of each type is presented in the results.
+
+On several test cases, delta encoding slightly exceeds the compression of the optimal reference models. In theory, the optimal linear models should perform as well or better than delta encoding, since delta encoding is within the class of models that were optimized over in equation \eqref{eq:optimize} . The occasional inferior performance of the optimal linear models might be due to quantization error of the model coefficients and increased fixed point error from computational complexity. This explanation is supported by the observation that the MVAR model, which has many more coefficients, often underperforms relative to the AR model while the opposite would be true in the absence of numeric error. Investigation of the optimal models' coefficients showed that they were similar to those of delta encoding.
+
+The compression level achieved on each movement activity varied greatly, and appears roughly correlated with the intensity of movement involved in that activity (Figure \ref{fig:movements}) . This matches our expectations as higher intensity of movement will intuitively have more information content. The compression of body segment information (Figure \ref{fig:segments}) showed no significant variation.
+
+The MVAR optimal model and the AR optimal model achieved similar performance. This fails to suggest a linear relationship between the various axes of accelerometer and gyroscope information. While we would expect a relationship between rotation as measured by the gyroscope and orientation of the gravity vector as measured by the accelerometer, this is not a linear relationship and thus was not captured by our models. This study does not preclude the possibility of a non-linear model to successfully exploit such a relationship.
+
+The compression ratios presented in this paper are intended to demonstrate the relative difference between compression methods and may not be representative of the absolute CR experienced in other applications. There are many other factors which can affect the compression ratio which are not explored in this paper. Namely, sensor differences of precision, noise, bias, and sampling rate are expected to have a large impact on the CR achieved. That being said, our corpus consisted of low-cost consumer grade IMUs at a low sampling rate, and the authors would expect many applications to experience significantly higher compression than presented here if higher sampling rate or higher quality sensors are used.
+
+The corpus chosen for demonstrating performance in this work allowed us to explore the effect of movement activity and body segment on compression. However, it could be improved for this purpose by including diverse hardware and higher sampling rates which would be more representative of applications. Signals from more body segments should also be included in an ideal corpus.
+
+In future work, the the methods described in this paper can be improved to dynamically detect the optimal Golomb coding order and to recover from dropped packets. Dynamic linear models have shown promising results in similar applications \cite{Blalock2018} and non-linear models can also be explored. The community would also benefit from a standardized format for representing IMU data, as well as distortion criteria for the various applications of the human movement IMU signal. This would pave the way for the development of lossy compression methods.
+
+
+\section{Conclusion}
+This work explores methods for the compression of human movement IMU signal. Greater compression will improve data transmission throughput and storage efficiency, potentially enabling new technology applications which were previously infeasible. For the corpus selected, delta encoding provided near-optimal linear compression (factor of 9.6-18.7 times) with low computational cost.
+
+\section*{Acknowledgment}
+This work was supported by the National Natural Science
+Foundation of China (51875347).
+
+\bibliography{mendeley_citations,other_citations}{}
+\bibliographystyle{ieeetr}
+%TODO: Make sure bib style is correct!
+%\bibitem{IEEEhowto:kopka}
+
+\clearpage
+\section*{Scratch Section}
+
+Lambda discussion
+Compare study of other signals
+talking about other signal studies
+
+TODO: rewrite paragraphs below, maybe drop or move to method
+
+The goal of the model is to produce an accurate PMF with minimum entropy. Intuitively this means that compression is higher the more "sure" the model is about some occurrences over other ones. If an optimal encoder is used, the compression ratio can be regarded as a quantitative measurement of the model's understanding of the underlying signal. Because of this, we expect the performance of various signal models to give us insight into the content of the kinematic signal.
+
+The same coder and decoder is employed by all compression methods explored in this work, and methods are thus identified by the model used. Models are presented as predictive algorithms. Using this paradigm, the residual is the difference between each input symbol and what the model predicted the symbol to be. The compressed size is the first order entropy of the residual signal.
+
+
+Consider deleting below:
+
+TODO: why do we assume our signal is geometrically distributed about the mean!?
+TODO: relationship for natural signals of residual signal and compression ratio
+
+
+Linearized rotating gravity - A Newtonian physics based model in which a constant magnitude acceleration vector rotates according to gyroscope readings.
+
+ In the context of compression, complex or numerically unstable algorithms may produce compression ratios which underestimate their understanding of the underlying signal since their implementation is not equivalent to their mathematical derivation.
+
+TODO: handle negatives in optimal filter derivation!
+
+TODO: Discussion of cross stream FIR coefficients, pole zero plots, precision effect
+
+TODO: Medical names for body parts?
+
+TODO: can I prove that the optimal IIR linear filter cannot exceed that of the optimal FIR linear filter?
+
+TODO: audio compression comparison of methods and performance
+TODO: demonstrate long implementation of compression technique to show that error is from quantization and fixed point error
+TODO: re clarify hypothesis, discuss what was verified
+TODO[change the name of the repo, clean up docs, and release]. 
+
+TODO: can I reference solved problem Mahoney2013?
+[TODO remove?]  We hypothesized that compression ratios would be comparable to those achieved in lossless audio compression. We also hypothesized that the best performing method will utilize some cross axis correlation and be informed by physics based models.
+[TODO] find better pidgeon hole citation
+TODO fix citations (some seem wrong or in the wrong format)
+
+Future work includes:
+-arithmetic coding
+-lossy methods (define a standard for acceptable loss)
+-inter sensor correlation
+-magnetometer
+-sensors with fixed point, homogeneous sample space
+
+akward second paragraph first sentence
+
+state of modeling in biomed and audio
+how it is the same and/or different
+what techniques are used
+[TODO: consider computation time?]
+\end{document}

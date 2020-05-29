@@ -1,0 +1,55 @@
+This is BibTeX, Version 0.99d (TeX Live 2017/Debian)
+Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
+The top-level auxiliary file: chiasson_draft_3_1.aux
+The style file: ieeetr.bst
+Database file #1: mendeley_citations.bib
+Database file #2: other_citations.bib
+Warning--can't use both volume and number fields in Society2008
+Warning--empty publisher in Society2008
+Warning--can't use both volume and number fields in Goldberg1991
+Warning--empty publisher in Goldberg1991
+Warning--empty journal in Blalock2018
+Warning--there's a number but no series in Tanskanen2000
+Warning--empty publisher in Tanskanen2000
+You've used 33 entries,
+            1876 wiz_defined-function locations,
+            705 strings with 9049 characters,
+and the built_in function-call counts, 8223 in all, are:
+= -- 841
+> -- 289
+< -- 0
++ -- 112
+- -- 79
+* -- 594
+:= -- 1171
+add.period$ -- 39
+call.type$ -- 33
+change.case$ -- 29
+chr.to.int$ -- 0
+cite$ -- 40
+duplicate$ -- 409
+empty$ -- 792
+format.name$ -- 79
+if$ -- 2005
+int.to.chr$ -- 0
+int.to.str$ -- 33
+missing$ -- 36
+newline$ -- 108
+num.names$ -- 33
+pop$ -- 87
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 268
+stack$ -- 0
+substring$ -- 521
+swap$ -- 163
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 7
+while$ -- 87
+width$ -- 35
+write$ -- 332
+(There were 7 warnings)
