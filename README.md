@@ -21,4 +21,3 @@ Code can be build using the bash script `build.sh`. cmake must be installed.
 ```
 Usage: ./humoco [-t technique] [-k rice order] [-f filter_location] data_location
 ```
-what the expected data format is
