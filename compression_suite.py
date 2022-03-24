@@ -3,7 +3,7 @@
 import os
 import subprocess
 
-from machine_learning import optimal_fir
+from optimal_filters import optimal_fir
 
 SENS = ['acc', 'gyro']
 LOCS = ['rf','rs','rt','lf','ls','lt']
@@ -11,10 +11,16 @@ ACTS = ['bicycling','running','sitting','standing','walking']
 DIMS = ['x','y','z']
 SUBJ = range(1, 18+1)
 
+database_dir = r"C:\Users\david\Documents\David_Documents\research\HuGaDB\Data"
+#code_dir = "~/Documents/David/research/kinetic_codec/"
+code_dir = r"C:\Users\david\Documents\David_Documents\research\kinetic_codec"
+
 def get_file_list(data_type):
 
-    folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/files/"
-    csv_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/"
+    #folder_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/files/"
+    folder_loc = r"C:\users\david\Documents\David_Documents\research\HuGaDB\HuGaDB\Data.parsed.noVar\processed\files"
+    #csv_loc = "/home/chiasson/Documents/David/research/HuGaDB/HuGaDB/Data.parsed.noVar/processed/"
+    csv_loc = r"C:\users\david\Documents\David_Documents\research\HuGaDB\HuGaDB\Data.parsed.noVar\processed"
     csv_folder = None
     all_folders = [os.path.join(folder_loc, f) for f in os.listdir(folder_loc)]
     all_folders = list(filter(lambda x: x.split('.')[-1] == 'txt', all_folders))
@@ -62,7 +68,9 @@ def extract_size(output_text):
     return int(output_text.split(b',')[2].split(b' ')[-1])
 
 def run_iteration(technique, k, filter_loc, data_loc, verbose=False):
-    command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
+    #command = "./bin/humoco -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
+    cmd_path = os.path.join(os.path.dirname(__file__), 'bin', 'humoco')
+    command = cmd_path + " -t {} -k {} -f {} {}".format(technique, k, filter_loc, data_loc)
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
     if (result.returncode != 0):
         print(result.args)
@@ -163,7 +171,6 @@ def run_all_on_data(data_type):
 
     data_list, csv_folder = get_file_list(data_type)
 
-    """
     #####################
     # Reference formats #
     #####################
@@ -171,10 +178,9 @@ def run_all_on_data(data_type):
     print_zip_size(csv_folder)
     print_binary_size(csv_folder)
 
-    """
     print("##Rice")
     technique = "auto-homo"
-    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    filter_loc = os.path.join(code_dir, "data", "fixed_poly_pred", "{}_deg_poly_reg", "{}")
     process_data_list(technique,  filter_loc.format(0,0), data_list)
 
     ##########
@@ -182,14 +188,14 @@ def run_all_on_data(data_type):
     ##########
     print('##spline')
     technique = "auto-homo"
-    filter_loc = "~/Documents/David/research/kinetic_codec/data/natural_spline_pred/condition0/2"
+    filter_loc = os.path.join(code_dir, "data", "natural_spline_pred", "condition0", "2")
     process_data_list(technique, filter_loc, data_list)
 
     ###############################
     # Polynomial Regression Suite #
     ###############################
     technique = "auto-homo"
-    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
+    filter_loc = os.path.join(code_dir, "data", "fixed_poly_pred", "{}_deg_poly_reg", "{}")
     print('##5 deg')
     process_data_list(technique, filter_loc.format(6,19), data_list)
     print('##4 deg')
@@ -309,43 +315,4 @@ def test_2():
     run_iteration(technique, 5, filter_loc, data_loc, True)
 
 if __name__ == '__main__':
-
     run_all_on_data("all")
-    """
-    for person in SUBJ:
-        if person == 2:
-            continue
-        if person == 1:
-            continue
-        print("Subject {}".format(person))
-        run_all_on_data(person)
-    """
-    """
-
-    filter_loc = "~/Documents/David/research/kinetic_codec/data/fixed_poly_pred/{}_deg_poly_reg/{}"
-    for location in LOCS:
-        print("Location {}".format(location))
-        data_list, csv_folder = get_file_list(location)
-        technique = "auto-homo"
-        process_data_list(technique, filter_loc.format(1,1), data_list)
-        #run_all_on_data(location)
-
-    for action in ACTS:
-        continue
-        print("Action {}".format(action))
-        data_list, csv_folder = get_file_list(action)
-        technique = "auto-homo"
-        process_data_list(technique, filter_loc.format(1,1), data_list)
-        #run_all_on_data(action)
-    """
-    """
-    filters = os.listdir("cross_fir")
-    data_list, csv_folder = get_file_list("all")
-    filter_dir = "/home/chiasson/Documents/David/research/kinetic_codec/cross_fir/"
-    filters = filter(lambda x:os.path.getsize(x)==288, [os.path.join(filter_dir, x) for x in os.listdir(filter_dir)])
-    #print(list(filters))
-
-    for f in filters:
-        technique = 'cross-hetero'
-        process_data_list(technique, f, data_list, verbose=False)
-    """

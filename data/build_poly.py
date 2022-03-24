@@ -20,7 +20,7 @@ for m in range(0, 7): # polynomial order
         os.makedirs(dir_name)
     except OSError:
         pass
-    for n in list(range(m, 20)) + [2**i for i in range(5, 10)]:
+    for n in list(range(m, 20)) + [2**i for i in range(5, 10)]: # FIR filter length
     #for n in range(m, 20):
         print("computing m={}, n={}".format(m, n))
         x = np.matrix([[b**a for a in range(m)] for b in range(n)], np.double)

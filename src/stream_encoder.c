@@ -1,10 +1,16 @@
 #include <stdint.h>
-#include <sys/mman.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef __linux__
+#include <sys/mman.h>
+#elif _WIN32
+#include <windows.h>
+#endif
+
 #include "fir_predictive_filter.h"
 #include "stream_encoder.h"
 #include "data_format.h"
@@ -18,6 +24,37 @@ int file_exists(const char *file_name) {
   if (access(file_name, F_OK) != -1) return 1;
   else return 0;
 }
+
+#ifdef __linux__
+int memory_map_data(const char *dir_name, const char *data_name, int size, int16_t** dest_pointer) {
+	char file_name[500];
+	strcpy(file_name, dir_name);
+	strcat(file_name, data_name);
+	if (!file_exists(file_name)) {
+		fprintf(stderr, "Sensor data file `%s` not found", file_name);
+		return 1;
+	}
+	int fd = open(file_name, O_RDONLY, 0);
+	(*dest_pointer) = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+	close(fd);
+}
+#elif _WIN32
+int memory_map_data(const char *dir_name, const char *data_name, int size, void** dest_pointer) {
+	char file_name[500];
+	strcpy(file_name, dir_name);
+	strcat(file_name, data_name);
+	if (!file_exists(file_name)) {
+		fprintf(stderr, "Sensor data file `%s` not found", file_name);
+		return 1;
+	}
+	
+	FILE *f = fopen(file_name, "rb");
+	(*dest_pointer) = malloc(size);
+	fread(*dest_pointer, 1, size, f);
+	fclose(f);
+	return 0;
+}
+#endif
 
 int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state) {
 
@@ -74,8 +111,10 @@ int build_stream_fir(char *filter_loc, int technique, ObjectState *object_state)
   fseek(fp, 0L, SEEK_END);
   int coeff_count = ftell(fp) / sizeof(int32_t);
   fseek(fp, 0L, SEEK_SET);
-  int32_t *filter_coeffs = (int32_t*)mmap(NULL, sizeof(int32_t)*coeff_count, PROT_READ, MAP_SHARED, fd, 0);
-
+  //int32_t *filter_coeffs = (int32_t*)mmap(NULL, sizeof(int32_t)*coeff_count, PROT_READ, MAP_SHARED, fd, 0);
+  int32_t *filter_coeffs;
+  memory_map_data("", filter_loc, sizeof(int32_t)*coeff_count, (void**)&filter_coeffs);
+  
   int history;
   int stream_count = 6;
   switch (technique) {
@@ -252,6 +291,7 @@ int check_errors(ObjectState *input_state, ObjectState *output_state) {
   return 0;
 }
 
+
 int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample_count) {
   /// @TODO(David): write a function to free an munmap sensor data
   int fd;
@@ -269,42 +309,23 @@ int load_sensor_data(const char *data_dir, ObjectState *input_state, int *sample
   fd = open(file_name, O_RDONLY, 0);
   FILE* fp = fdopen(fd, "r");
   fseek(fp, 0L, SEEK_END); // assume all streams are same length
-  *sample_count = ftell(fp) / sizeof(int16_t);
+  int data_stream_size = ftell(fp);
+  *sample_count = data_stream_size / sizeof(int16_t);
   //printf("size %d\n", *sample_count);
   //fflush(stdout);
   fseek(fp, 0L, SEEK_SET);
-
-  accel->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  strcpy(file_name, data_dir);
-  strcat(file_name, "/acc_y");
-  fd = open(file_name, O_RDONLY, 0);
-  accel->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  strcpy(file_name, data_dir);
-  strcat(file_name, "/acc_z");
-  fd = open(file_name, O_RDONLY, 0);
-  accel->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
+  
+  memory_map_data(data_dir, "/acc_x", data_stream_size, (void**)&(accel->x));
+  memory_map_data(data_dir, "/acc_y", data_stream_size, (void**)&(accel->y));
+  memory_map_data(data_dir, "/acc_z", data_stream_size, (void**)&(accel->z));
   accel->data_len = *sample_count;
 
   input_state->orientation.rot_vel = malloc(sizeof(Vect));
   Vect *gyro = input_state->orientation.rot_vel;
-  strcpy(file_name, data_dir);
-  strcat(file_name, "/gyro_x");
-  fd = open(file_name, O_RDONLY, 0);
-  gyro->x = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  strcpy(file_name, data_dir);
-  strcat(file_name, "/gyro_y");
-  fd = open(file_name, O_RDONLY, 0);
-  gyro->y = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
-  strcpy(file_name, data_dir);
-  strcat(file_name, "/gyro_z");
-  fd = open(file_name, O_RDONLY, 0);
-  gyro->z = (int16_t*)mmap(NULL, sizeof(int16_t)*(*sample_count), PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
+  memory_map_data(data_dir, "/gyro_x", data_stream_size, (void**)&(gyro->x));
+  memory_map_data(data_dir, "/gyro_y", data_stream_size, (void**)&(gyro->y));
+  memory_map_data(data_dir, "/gyro_z", data_stream_size, (void**)&(gyro->z));
   gyro->data_len = *sample_count;
 
   //input_state->orientation.orient = malloc(sizeof(Vect));

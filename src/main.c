@@ -12,13 +12,13 @@
 
 int main(int argc, char *argv[])
 {
-	int opt;
+  int opt;
   int rice_order, tech;
   char filter_loc[200];
   char data_loc[200];
-	while ((opt = getopt(argc, argv, "t:hk:f:")) != -1) {
-		switch (opt) {
-			case 't':
+  while ((opt = getopt(argc, argv, "t:hk:f:")) != -1) {
+    switch (opt) {
+      case 't':
       {
         if (strcmp(optarg, "auto-homo") == 0) {
           tech = TECH__AUTOHOMO;
@@ -29,26 +29,26 @@ int main(int argc, char *argv[])
         } else if (strcmp(optarg, "cross-hetero") == 0) {
           tech = TECH__CROSSHETERO;
         } else {
-				  fprintf(stderr, "Unexpected technique name: %s\n", optarg);
+          fprintf(stderr, "Unexpected technique name: %s\n", optarg);
           return 1;
         }
-				break;
+        break;
       }
-			case 'k':
+      case 'k':
         rice_order = atoi(optarg);
-				break;
-			case 'f':
+        break;
+      case 'f':
         strcpy(filter_loc, optarg);
-				break;
-			case 'h':
-			default:
-				fprintf(stderr, "Usage: %s [-t technique] [-k rice order] [-f filter_location] data_location\n", argv[0]);
-				fprintf(stderr, "unexpected input %c\n", opt);
-				break;
-		}
-	}
+        break;
+      case 'h':
+      default:
+        fprintf(stderr, "Usage: %s [-t technique] [-k rice order] [-f filter_location] data_location\n", argv[0]);
+        fprintf(stderr, "unexpected input %c\n", opt);
+        break;
+    }
+  }
   if (optind >= argc) {
-		fprintf(stderr, "Need data location\n");
+    fprintf(stderr, "Usage: %s [-t technique] [-k rice order] [-f filter_location] data_location\n", argv[0]);
     return 1;
   }
   strcpy(data_loc, argv[optind]);
