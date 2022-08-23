@@ -1,6 +1,6 @@
 # Kinetic Codec
 
-> For those that are busy I will cut to the chase. The code in this repository is not helpful for the application for which it is designed. I leave it here for the sake of scientific openness. The conclusion of my study was that nothing (in the space of linear static prediction models) beats delta encoding. I would recommend you simply implement delta encoding yourself (it just takes one minus sign).
+> For those that are busy I will cut to the chase. The code in this repository is not helpful for the application for which it is designed. I leave it here for the sake of scientific openness. The conclusion of my study was that nothing (in the space of linear static prediction models) beats delta encoding as a predictive model for the class of signals considered. I would recommend you simply implement delta encoding yourself (it just takes one minus sign).
 
 This is source code to go along with the paper "Lossless Compression of Human Movement IMU Signals" published in the open access journal MDPI Sensors:
 https://www.mdpi.com/1424-8220/20/20/5926
